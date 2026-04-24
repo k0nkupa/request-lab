@@ -23,6 +23,8 @@ final class AppStore {
     private let keychainSecretStore: KeychainSecretStore
     @ObservationIgnored
     private let postmanImportService: PostmanImportService
+    @ObservationIgnored
+    private let requestValidationService: RequestValidationService
 
     init(
         workspace: APIWorkspace = .empty,
@@ -30,7 +32,8 @@ final class AppStore {
         executionService: RequestExecutionService = RequestExecutionService(),
         workspaceFileStore: WorkspaceFileStore = WorkspaceFileStore(),
         keychainSecretStore: KeychainSecretStore = KeychainSecretStore(),
-        postmanImportService: PostmanImportService = PostmanImportService()
+        postmanImportService: PostmanImportService = PostmanImportService(),
+        requestValidationService: RequestValidationService = RequestValidationService()
     ) {
         self.workspace = workspace
         self.workspaceURL = workspaceURL
@@ -38,6 +41,7 @@ final class AppStore {
         self.workspaceFileStore = workspaceFileStore
         self.keychainSecretStore = keychainSecretStore
         self.postmanImportService = postmanImportService
+        self.requestValidationService = requestValidationService
         self.selectedRequestID = workspace.collections.first?.requests.first?.id
         self.selectedEnvironmentID = workspace.environments.first?.id
     }
@@ -285,6 +289,7 @@ final class AppStore {
         executionErrorMessage = nil
 
         do {
+            try requestValidationService.validateForSend(request)
             let result = try await executionService.execute(
                 request,
                 environment: selectedEnvironmentWithSecrets()

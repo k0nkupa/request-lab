@@ -4,6 +4,8 @@ import RequestLabCore
 struct RequestEditorView: View {
     @Bindable var store: AppStore
     @State private var selectedTab = RequestEditorTab.params
+    @State private var selectedResponseTab = ResponseTab.body
+    private let jsonFormatter = JSONFormattingService()
 
     private var request: APIRequest? {
         store.selectedRequest
@@ -148,10 +150,17 @@ struct RequestEditorView: View {
                 }
 
                 GroupBox("Variables JSON") {
-                    TextEditor(text: graphQLVariablesBinding)
-                        .font(.system(.body, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 90)
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextEditor(text: graphQLVariablesBinding)
+                            .font(.system(.body, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: 90)
+
+                        Button("Format JSON", systemImage: "text.alignleft") {
+                            formatGraphQLVariables()
+                        }
+                        .buttonStyle(.borderless)
+                    }
                 }
             } else {
                 ContentUnavailableView(
@@ -194,14 +203,23 @@ struct RequestEditorView: View {
                     values: formBodyBinding
                 )
             } else {
-                TextEditor(text: bodyTextBinding)
-                    .font(.system(.body, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 180)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(.separator, lineWidth: 1)
+                VStack(alignment: .leading, spacing: 8) {
+                    TextEditor(text: bodyTextBinding)
+                        .font(.system(.body, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 180)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(.separator, lineWidth: 1)
+                        }
+
+                    if bodyTypeBinding.wrappedValue == .json {
+                        Button("Format JSON", systemImage: "text.alignleft") {
+                            formatJSONBody()
+                        }
+                        .buttonStyle(.borderless)
                     }
+                }
             }
 
             Spacer()
@@ -235,11 +253,24 @@ struct RequestEditorView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let response = store.latestResponse {
-                ScrollView {
-                    Text(response.body.isEmpty ? "Empty response body" : response.body)
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                TabView(selection: $selectedResponseTab) {
+                    ScrollView {
+                        Text(responseBodyText(response.body))
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .tabItem { Text("Body") }
+                    .tag(ResponseTab.body)
+
+                    ScrollView {
+                        Text(Self.formatKeyValues(response.headers))
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .tabItem { Text("Headers") }
+                    .tag(ResponseTab.headers)
                 }
             } else {
                 ContentUnavailableView(
@@ -462,6 +493,28 @@ struct RequestEditorView: View {
         )
     }
 
+    private func responseBodyText(_ body: String) -> String {
+        body.isEmpty ? "Empty response body" : jsonFormatter.prettyPrintedIfJSON(body)
+    }
+
+    private func formatJSONBody() {
+        do {
+            let formatted = try jsonFormatter.prettyPrinted(bodyTextBinding.wrappedValue)
+            bodyTextBinding.wrappedValue = formatted
+        } catch {
+            store.executionErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func formatGraphQLVariables() {
+        do {
+            let formatted = try jsonFormatter.prettyPrinted(graphQLVariablesBinding.wrappedValue)
+            graphQLVariablesBinding.wrappedValue = formatted
+        } catch {
+            store.executionErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     @preconcurrency private func binding<Value>(
         get: @escaping () -> Value,
         set: @escaping (Value) -> Void
@@ -505,6 +558,11 @@ private enum RequestEditorTab {
     case auth
     case body
     case graphQL
+}
+
+private enum ResponseTab {
+    case body
+    case headers
 }
 
 private enum RequestBodyEditorType: CaseIterable {

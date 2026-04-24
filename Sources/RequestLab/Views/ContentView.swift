@@ -25,12 +25,14 @@ struct ContentView: View {
                 Button("Open", systemImage: "folder") {
                     openWorkspacePanel()
                 }
+                .keyboardShortcut("o", modifiers: .command)
                 .help("Open workspace")
 
                 Menu("New", systemImage: "plus") {
                     Button("Request") {
                         store.createRequest()
                     }
+                    .keyboardShortcut("n", modifiers: .command)
 
                     Button("GraphQL Request") {
                         store.createRequest(kind: .graphQL)
@@ -64,12 +66,14 @@ struct ContentView: View {
                         await store.sendSelectedRequest()
                     }
                 }
+                .keyboardShortcut(.return, modifiers: .command)
                 .disabled(store.selectedRequest == nil || store.isSending)
                 .help("Send request")
 
                 Button("Delete", systemImage: "trash", role: .destructive) {
                     store.deleteSelectedRequest()
                 }
+                .keyboardShortcut(.delete, modifiers: [])
                 .disabled(store.selectedRequest == nil)
                 .help("Delete selected request")
 
@@ -80,11 +84,13 @@ struct ContentView: View {
                         store.saveWorkspace()
                     }
                 }
+                    .keyboardShortcut("s", modifiers: .command)
                     .help("Save workspace")
 
                 Button("Save As", systemImage: "square.and.arrow.down.on.square") {
                     saveWorkspacePanel()
                 }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
                 .help("Save workspace as")
             }
 

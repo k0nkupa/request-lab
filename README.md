@@ -2,7 +2,7 @@
 
 RequestLab is a lightweight open-source macOS API client: a native SwiftUI alternative to Postman for REST and GraphQL workflows.
 
-This repository currently contains the early native app slice. It can build, launch, open and save workspace folders, import Postman collection/environment JSON, create/delete workspace items, edit REST and GraphQL requests, keep secret variable values in Keychain, round-trip typed workspace data through YAML, resolve environment variables, and execute requests through `URLSession`. Glamour later; load-bearing beams first.
+This repository currently contains the early native app slice. It can build, launch, open and save workspace folders, import Postman collection/environment JSON, create/delete workspace items, edit REST and GraphQL requests, validate requests before send, keep secret variable values in Keychain, round-trip typed workspace data through YAML, resolve environment variables, and execute requests through `URLSession`. Glamour later; load-bearing beams first.
 
 ## Current Scope
 
@@ -16,6 +16,9 @@ This repository currently contains the early native app slice. It can build, lau
 - Open, Save, and Save As for local `.workspace` folders.
 - Postman Collection v2.1 and environment JSON import.
 - Create and delete actions for requests, collections, and environments.
+- Request validation and JSON formatting helpers.
+- Response body and header tabs.
+- Keyboard shortcuts for common actions.
 - Keychain-backed values for secret environment variables.
 - Response status, duration, headers, body, and local history capture.
 - Sample workspace fixture at `Fixtures/SampleWorkspace.workspace`.
@@ -24,7 +27,7 @@ This repository currently contains the early native app slice. It can build, lau
 
 ## Planned Follow-Up Slices
 
-- Response polishing, keyboard shortcuts, and release packaging.
+- Release packaging.
 
 ## Requirements
 
@@ -88,6 +91,7 @@ The current Swift test suite covers:
 - Nested workspace editing helpers.
 - Keychain secret write/read/update/delete behavior.
 - Postman collection and environment import mapping.
+- Request validation and JSON formatting behavior.
 
 Run the suite with:
 
