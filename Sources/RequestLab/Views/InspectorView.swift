@@ -4,6 +4,8 @@ import SwiftUI
 struct InspectorView: View {
     let request: APIRequest?
     let environment: APIEnvironment?
+    let response: APIExecutionResult?
+    let errorMessage: String?
 
     var body: some View {
         ScrollView {
@@ -11,6 +13,8 @@ struct InspectorView: View {
                 requestSection
                 Divider()
                 environmentSection
+                Divider()
+                responseSection
             }
             .padding()
         }
@@ -50,6 +54,26 @@ struct InspectorView: View {
                 }
             } else {
                 ContentUnavailableView("No environment selected", systemImage: "server.rack")
+            }
+        }
+    }
+
+    private var responseSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Last Response")
+                .font(.headline)
+
+            if let response {
+                LabeledContent("Status", value: "\(response.statusCode)")
+                LabeledContent("Duration", value: "\(response.durationMilliseconds) ms")
+                LabeledContent("URL", value: response.url)
+                LabeledContent("Headers", value: "\(response.headers.count)")
+            } else if let errorMessage {
+                Text(errorMessage)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            } else {
+                ContentUnavailableView("No response", systemImage: "tray")
             }
         }
     }

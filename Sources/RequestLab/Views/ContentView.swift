@@ -9,13 +9,15 @@ struct ContentView: View {
             SidebarView(store: store)
         } detail: {
             HSplitView {
-                RequestEditorView(request: store.selectedRequest)
+                RequestEditorView(store: store)
                     .frame(minWidth: 560)
 
                 if store.isInspectorVisible {
                     InspectorView(
                         request: store.selectedRequest,
-                        environment: store.selectedEnvironment
+                        environment: store.selectedEnvironment,
+                        response: store.latestResponse,
+                        errorMessage: store.executionErrorMessage
                     )
                     .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
                 }
@@ -23,8 +25,13 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup {
-                Button("Send", systemImage: "paperplane") {}
-                    .help("Send request")
+                Button("Send", systemImage: "paperplane") {
+                    Task {
+                        await store.sendSelectedRequest()
+                    }
+                }
+                .disabled(store.selectedRequest == nil || store.isSending)
+                .help("Send request")
 
                 Button("Save", systemImage: "square.and.arrow.down") {}
                     .help("Save workspace")

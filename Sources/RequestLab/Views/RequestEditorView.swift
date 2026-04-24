@@ -2,8 +2,12 @@ import RequestLabCore
 import SwiftUI
 
 struct RequestEditorView: View {
-    let request: APIRequest?
+    @Bindable var store: AppStore
     @State private var selectedTab = RequestEditorTab.params
+
+    private var request: APIRequest? {
+        store.selectedRequest
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,7 +38,7 @@ struct RequestEditorView: View {
 
             Divider()
 
-            responsePlaceholder
+            responsePanel
         }
     }
 
@@ -51,7 +55,12 @@ struct RequestEditorView: View {
             TextField("Request URL", text: .constant(request?.url ?? ""))
                 .textFieldStyle(.roundedBorder)
 
-            Button("Send", systemImage: "paperplane") {}
+            Button("Send", systemImage: "paperplane") {
+                Task {
+                    await store.sendSelectedRequest()
+                }
+            }
+            .disabled(request == nil || store.isSending)
         }
     }
 
@@ -112,17 +121,46 @@ struct RequestEditorView: View {
         }
     }
 
-    private var responsePlaceholder: some View {
+    private var responsePanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Response")
-                .font(.headline)
+            HStack {
+                Text("Response")
+                    .font(.headline)
 
-            ContentUnavailableView(
-                "No response yet",
-                systemImage: "tray",
-                description: Text("Request execution lands in a later task.")
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spacer()
+
+                if let response = store.latestResponse {
+                    Text("\(response.statusCode) • \(response.durationMilliseconds) ms")
+                        .font(.caption)
+                        .foregroundStyle(response.statusCode < 400 ? .green : .orange)
+                }
+            }
+
+            if store.isSending {
+                ProgressView("Sending request...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage = store.executionErrorMessage {
+                ContentUnavailableView(
+                    "Request failed",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(errorMessage)
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let response = store.latestResponse {
+                ScrollView {
+                    Text(response.body.isEmpty ? "Empty response body" : response.body)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                ContentUnavailableView(
+                    "No response yet",
+                    systemImage: "tray",
+                    description: Text("Send a request to inspect the response.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .padding()
         .frame(minHeight: 220)

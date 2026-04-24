@@ -2,7 +2,7 @@
 
 RequestLab is a lightweight open-source macOS API client: a native SwiftUI alternative to Postman for REST and GraphQL workflows.
 
-This repository currently contains the foundation slice. It is intentionally small: the app can build, launch, show the workspace shell, and round-trip typed workspace data through YAML. Real request execution and the richer API-client features come next. Glamour later; load-bearing beams first.
+This repository currently contains the early native app slice. It can build, launch, show the workspace shell, round-trip typed workspace data through YAML, resolve environment variables, and execute REST requests through `URLSession`. Glamour later; load-bearing beams first.
 
 ## Current Scope
 
@@ -10,13 +10,14 @@ This repository currently contains the foundation slice. It is intentionally sma
 - Three-pane workspace/request/inspector layout.
 - Typed workspace, collection, request, environment, variable, auth, body, and history models.
 - YAML workspace load/save support.
+- REST request execution with environment variable resolution.
+- Response status, duration, headers, body, and local history capture.
 - Sample workspace fixture at `Fixtures/SampleWorkspace.workspace`.
 - Swift tests for model and persistence behavior.
 - Local build/run script for Codex and terminal workflows.
 
 ## Planned Follow-Up Slices
 
-- Request execution.
 - GraphQL editing.
 - Keychain-backed secrets.
 - Postman import.
@@ -75,6 +76,8 @@ The current Swift test suite covers:
 - Collection and environment order preservation.
 - Variable identity behavior.
 - Request body encoding and decoding.
+- Variable resolution.
+- Mocked REST request execution.
 
 Run the suite with:
 
