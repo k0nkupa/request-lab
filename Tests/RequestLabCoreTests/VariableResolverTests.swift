@@ -93,4 +93,64 @@ struct VariableResolverTests {
         #expect(resolved.headers["Content-Type"] == "application/x-www-form-urlencoded")
         #expect(String(data: try #require(resolved.bodyData), encoding: .utf8) == "email=tony@example.test&scope=orders")
     }
+
+    @Test("shapes GraphQL request bodies")
+    func shapesGraphQLRequestBodies() throws {
+        let request = APIRequest(
+            id: "req_graphql",
+            name: "GraphQL orders",
+            kind: .graphQL,
+            method: .post,
+            url: "{{baseUrl}}/graphql",
+            graphQL: APIGraphQLPayload(
+                query: "query Orders($limit: Int!) { orders(limit: $limit) { id } }",
+                operationName: "Orders",
+                variables: #"{"limit":{{limit}}}"#
+            )
+        )
+        let environment = APIEnvironment(
+            id: "env_local",
+            name: "Local",
+            variables: [
+                APIVariable(name: "baseUrl", value: "https://api.example.test"),
+                APIVariable(name: "limit", value: "25")
+            ]
+        )
+
+        let resolved = try VariableResolver().resolve(request, environment: environment)
+        let bodyData = try #require(resolved.bodyData)
+        let body = try #require(try JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+        let graphQLVariables = try #require(body["variables"] as? [String: Any])
+
+        #expect(resolved.url.absoluteString == "https://api.example.test/graphql")
+        #expect(resolved.headers["Content-Type"] == "application/json")
+        #expect(resolved.headers["Accept"] == "application/json")
+        #expect(body["query"] as? String == "query Orders($limit: Int!) { orders(limit: $limit) { id } }")
+        #expect(body["operationName"] as? String == "Orders")
+        #expect(graphQLVariables["limit"] as? Int == 25)
+    }
+
+    @Test("throws when GraphQL variables are not JSON")
+    func invalidGraphQLVariablesThrow() throws {
+        let request = APIRequest(
+            id: "req_graphql_invalid",
+            name: "Invalid GraphQL",
+            kind: .graphQL,
+            method: .post,
+            url: "https://api.example.test/graphql",
+            graphQL: APIGraphQLPayload(
+                query: "query Viewer { viewer { id } }",
+                variables: "not json"
+            )
+        )
+
+        do {
+            _ = try VariableResolver().resolve(request, environment: nil)
+            Issue.record("Expected GraphQL variable JSON validation failure")
+        } catch RequestLabError.invalidWorkspace(let message) {
+            #expect(message == "GraphQL variables must be valid JSON")
+        } catch {
+            Issue.record("Expected invalidWorkspace, got \(error)")
+        }
+    }
 }

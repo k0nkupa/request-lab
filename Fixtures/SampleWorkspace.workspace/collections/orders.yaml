@@ -3,6 +3,7 @@ name: Orders
 requests:
 - id: req_orders_list
   name: List orders
+  kind: rest
   method: GET
   url: "{{baseUrl}}/orders"
   headers:
@@ -14,3 +15,23 @@ requests:
     tokenVariable: apiToken
   body:
     type: none
+- id: req_orders_graphql
+  name: GraphQL orders
+  kind: graphql
+  method: POST
+  url: "{{baseUrl}}/graphql"
+  headers: {}
+  params: {}
+  body:
+    type: none
+  graphQL:
+    query: |-
+      query Orders($limit: Int!) {
+        orders(limit: $limit) {
+          id
+          status
+        }
+      }
+    operationName: Orders
+    variables: |-
+      {"limit": 50}

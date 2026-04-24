@@ -78,6 +78,7 @@ struct WorkspaceFileStoreTests {
 
         #expect(workspace.id == "wrk_sample")
         #expect(workspace.collections.first?.requests.first?.url == "{{baseUrl}}/orders")
+        #expect(workspace.collections.first?.requests.last?.kind == .graphQL)
         #expect(workspace.environments.first?.variables.contains { $0.name == "apiToken" && $0.isSecret } == true)
         #expect(workspace == .sample)
     }
@@ -315,6 +316,40 @@ struct WorkspaceFileStoreTests {
         #expect(didThrow)
     }
 
+    @Test("request decoding defaults missing kind to REST")
+    func requestDecodingDefaultsMissingKindToREST() throws {
+        let data = try #require(
+            #"{"id":"req_legacy","name":"Legacy","method":"GET","url":"https://api.example.test","headers":{},"params":{},"body":{"type":"none"}}"#
+                .data(using: .utf8)
+        )
+
+        let request = try JSONDecoder().decode(APIRequest.self, from: data)
+
+        #expect(request.kind == .rest)
+        #expect(request.graphQL == nil)
+    }
+
+    @Test("GraphQL payload round trips")
+    func graphQLPayloadRoundTrips() throws {
+        let request = APIRequest(
+            id: "req_graphql",
+            name: "GraphQL orders",
+            kind: .graphQL,
+            method: .post,
+            url: "https://api.example.test/graphql",
+            graphQL: APIGraphQLPayload(
+                query: "query Orders { orders { id } }",
+                operationName: "Orders",
+                variables: #"{"limit":50}"#
+            )
+        )
+
+        let data = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(APIRequest.self, from: data)
+
+        #expect(decoded == request)
+    }
+
     private func temporaryWorkspaceURL() -> URL {
         URL(filePath: NSTemporaryDirectory())
             .appending(path: UUID().uuidString)
@@ -341,6 +376,25 @@ extension APIWorkspace {
                             params: ["limit": "50"],
                             auth: APIAuth(type: .bearer, tokenVariable: "apiToken"),
                             body: .none
+                        ),
+                        APIRequest(
+                            id: "req_orders_graphql",
+                            name: "GraphQL orders",
+                            kind: .graphQL,
+                            method: .post,
+                            url: "{{baseUrl}}/graphql",
+                            graphQL: APIGraphQLPayload(
+                                query: """
+                                query Orders($limit: Int!) {
+                                  orders(limit: $limit) {
+                                    id
+                                    status
+                                  }
+                                }
+                                """,
+                                operationName: "Orders",
+                                variables: #"{"limit": 50}"#
+                            )
                         )
                     ]
                 )

@@ -37,32 +37,86 @@ public struct APICollection: Codable, Equatable, Sendable, Identifiable {
 public struct APIRequest: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var name: String
+    public var kind: APIRequestKind
     public var method: HTTPMethod
     public var url: String
     public var headers: [String: String]
     public var params: [String: String]
     public var auth: APIAuth?
     public var body: APIBody
+    public var graphQL: APIGraphQLPayload?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case kind
+        case method
+        case url
+        case headers
+        case params
+        case auth
+        case body
+        case graphQL
+    }
 
     public init(
         id: String,
         name: String,
+        kind: APIRequestKind = .rest,
         method: HTTPMethod,
         url: String,
         headers: [String: String] = [:],
         params: [String: String] = [:],
         auth: APIAuth? = nil,
-        body: APIBody = .none
+        body: APIBody = .none,
+        graphQL: APIGraphQLPayload? = nil
     ) {
         self.id = id
         self.name = name
+        self.kind = kind
         self.method = method
         self.url = url
         self.headers = headers
         self.params = params
         self.auth = auth
         self.body = body
+        self.graphQL = graphQL
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.kind = try container.decodeIfPresent(APIRequestKind.self, forKey: .kind) ?? .rest
+        self.method = try container.decode(HTTPMethod.self, forKey: .method)
+        self.url = try container.decode(String.self, forKey: .url)
+        self.headers = try container.decodeIfPresent([String: String].self, forKey: .headers) ?? [:]
+        self.params = try container.decodeIfPresent([String: String].self, forKey: .params) ?? [:]
+        self.auth = try container.decodeIfPresent(APIAuth.self, forKey: .auth)
+        self.body = try container.decodeIfPresent(APIBody.self, forKey: .body) ?? .none
+        self.graphQL = try container.decodeIfPresent(APIGraphQLPayload.self, forKey: .graphQL)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(method, forKey: .method)
+        try container.encode(url, forKey: .url)
+        try container.encode(headers, forKey: .headers)
+        try container.encode(params, forKey: .params)
+        try container.encodeIfPresent(auth, forKey: .auth)
+        try container.encode(body, forKey: .body)
+        try container.encodeIfPresent(graphQL, forKey: .graphQL)
+    }
+}
+
+public enum APIRequestKind: String, Codable, CaseIterable, Equatable, Sendable {
+    case rest
+    case graphQL = "graphql"
 }
 
 public enum HTTPMethod: String, Codable, CaseIterable, Equatable, Sendable {
@@ -157,6 +211,18 @@ public enum APIBody: Codable, Equatable, Sendable {
             try container.encode("form", forKey: .type)
             try container.encode(fields, forKey: .fields)
         }
+    }
+}
+
+public struct APIGraphQLPayload: Codable, Equatable, Sendable {
+    public var query: String
+    public var operationName: String?
+    public var variables: String
+
+    public init(query: String, operationName: String? = nil, variables: String = "{}") {
+        self.query = query
+        self.operationName = operationName
+        self.variables = variables
     }
 }
 

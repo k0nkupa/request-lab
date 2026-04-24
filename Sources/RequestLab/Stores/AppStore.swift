@@ -92,6 +92,28 @@ extension APIWorkspace {
                             params: [:],
                             auth: nil,
                             body: .none
+                        ),
+                        APIRequest(
+                            id: "req_starter_graphql",
+                            name: "GraphQL viewer",
+                            kind: .graphQL,
+                            method: .post,
+                            url: "{{baseUrl}}/graphql",
+                            headers: [:],
+                            params: [:],
+                            auth: nil,
+                            body: .none,
+                            graphQL: APIGraphQLPayload(
+                                query: """
+                                query Viewer {
+                                  viewer {
+                                    id
+                                  }
+                                }
+                                """,
+                                operationName: "Viewer",
+                                variables: "{}"
+                            )
                         )
                     ]
                 )

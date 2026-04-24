@@ -24,7 +24,7 @@ public struct VariableResolver: Sendable {
         var headers = try resolveHeaders(request.headers, variables: variables)
 
         try applyAuth(request.auth, to: &headers, variables: variables)
-        let bodyData = try makeBodyData(from: request.body, headers: &headers, variables: variables)
+        let bodyData = try makeBodyData(for: request, headers: &headers, variables: variables)
 
         return ResolvedAPIRequest(request: request, url: url, headers: headers, bodyData: bodyData)
     }
@@ -109,11 +109,15 @@ public struct VariableResolver: Sendable {
     }
 
     private func makeBodyData(
-        from body: APIBody,
+        for request: APIRequest,
         headers: inout [String: String],
         variables: [String: String]
     ) throws -> Data? {
-        switch body {
+        if request.kind == .graphQL {
+            return try makeGraphQLBodyData(from: request.graphQL, headers: &headers, variables: variables)
+        }
+
+        switch request.body {
         case .none:
             return nil
         case .raw(let value):
@@ -134,6 +138,49 @@ public struct VariableResolver: Sendable {
                 .sorted { $0.name < $1.name }
 
             return (components.percentEncodedQuery ?? "").data(using: .utf8)
+        }
+    }
+
+    private func makeGraphQLBodyData(
+        from payload: APIGraphQLPayload?,
+        headers: inout [String: String],
+        variables: [String: String]
+    ) throws -> Data {
+        guard let payload else {
+            throw RequestLabError.invalidWorkspace("GraphQL request is missing query payload")
+        }
+
+        let query = try resolveVariables(in: payload.query, variables: variables)
+        let operationName = try payload.operationName.map { try resolveVariables(in: $0, variables: variables) }
+        let variablesObject = try graphQLVariablesObject(from: payload.variables, variables: variables)
+        var body: [String: Any] = ["query": query, "variables": variablesObject]
+
+        if let operationName, !operationName.isEmpty {
+            body["operationName"] = operationName
+        }
+
+        headers["Content-Type", default: "application/json"] = "application/json"
+        headers["Accept", default: "application/json"] = "application/json"
+
+        return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+    }
+
+    private func graphQLVariablesObject(from rawValue: String, variables: [String: String]) throws -> Any {
+        let resolvedValue = try resolveVariables(in: rawValue, variables: variables)
+        let trimmedValue = resolvedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedValue.isEmpty else {
+            return [String: Any]()
+        }
+
+        guard let data = trimmedValue.data(using: .utf8) else {
+            throw RequestLabError.invalidWorkspace("GraphQL variables must be UTF-8 JSON")
+        }
+
+        do {
+            return try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw RequestLabError.invalidWorkspace("GraphQL variables must be valid JSON")
         }
     }
 

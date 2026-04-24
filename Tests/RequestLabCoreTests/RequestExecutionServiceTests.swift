@@ -86,6 +86,62 @@ struct RequestExecutionServiceTests {
         #expect(result.statusCode == 404)
         #expect(result.body == #"{"error":"missing"}"#)
     }
+
+    @Test("executes a GraphQL request")
+    func executesGraphQLRequest() async throws {
+        MockURLProtocol.handler = { request in
+            #expect(request.httpMethod == "POST")
+            #expect(request.url?.absoluteString == "https://api.example.test/graphql")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
+
+            let body = try #require(try JSONSerialization.jsonObject(with: bodyData(from: request)) as? [String: Any])
+            let graphQLVariables = try #require(body["variables"] as? [String: Any])
+
+            #expect(body["query"] as? String == "query Viewer { viewer { id } }")
+            #expect(body["operationName"] as? String == "Viewer")
+            #expect(graphQLVariables["preview"] as? Bool == true)
+
+            let url = try #require(request.url)
+            let response = try #require(
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: ["Content-Type": "application/json"]
+                )
+            )
+
+            return (response, #"{"data":{"viewer":{"id":"1"}}}"#.data(using: .utf8) ?? Data())
+        }
+        defer { MockURLProtocol.handler = nil }
+
+        let service = RequestExecutionService(session: URLSession.mocked)
+        let request = APIRequest(
+            id: "req_graphql",
+            name: "Viewer",
+            kind: .graphQL,
+            method: .post,
+            url: "{{baseUrl}}/graphql",
+            graphQL: APIGraphQLPayload(
+                query: "query Viewer { viewer { id } }",
+                operationName: "Viewer",
+                variables: #"{"preview":true}"#
+            )
+        )
+        let environment = APIEnvironment(
+            id: "env_local",
+            name: "Local",
+            variables: [
+                APIVariable(name: "baseUrl", value: "https://api.example.test")
+            ]
+        )
+
+        let result = try await service.execute(request, environment: environment)
+
+        #expect(result.statusCode == 200)
+        #expect(result.body == #"{"data":{"viewer":{"id":"1"}}}"#)
+    }
 }
 
 private final class MockURLProtocol: URLProtocol {

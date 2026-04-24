@@ -27,6 +27,7 @@ struct InspectorView: View {
 
             if let request {
                 LabeledContent("Name", value: request.name)
+                LabeledContent("Type", value: request.kind == .graphQL ? "GraphQL" : "REST")
                 LabeledContent("Method", value: request.method.rawValue)
                 LabeledContent("URL", value: request.url)
                 LabeledContent("Headers", value: "\(request.headers.count)")

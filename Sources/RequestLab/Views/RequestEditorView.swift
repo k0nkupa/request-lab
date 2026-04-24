@@ -32,6 +32,10 @@ struct RequestEditorView: View {
                 bodyView
                     .tabItem { Text("Body") }
                     .tag(RequestEditorTab.body)
+
+                graphQLView
+                    .tabItem { Text("GraphQL") }
+                    .tag(RequestEditorTab.graphQL)
             }
             .padding(.horizontal)
             .padding(.top)
@@ -54,6 +58,13 @@ struct RequestEditorView: View {
 
             TextField("Request URL", text: .constant(request?.url ?? ""))
                 .textFieldStyle(.roundedBorder)
+
+            if request?.kind == .graphQL {
+                Label("GraphQL", systemImage: "curlybraces")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .labelStyle(.titleAndIcon)
+            }
 
             Button("Send", systemImage: "paperplane") {
                 Task {
@@ -85,6 +96,46 @@ struct RequestEditorView: View {
                 }
             } else {
                 ContentUnavailableView("No auth configured", systemImage: "lock.open")
+            }
+
+            Spacer()
+        }
+        .padding(.vertical)
+    }
+
+    private var graphQLView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("GraphQL")
+                .font(.headline)
+
+            if let payload = request?.graphQL {
+                LabeledContent("Operation", value: payload.operationName ?? "Default")
+
+                GroupBox("Query") {
+                    ScrollView {
+                        Text(payload.query)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(minHeight: 120)
+                }
+
+                GroupBox("Variables") {
+                    ScrollView {
+                        Text(payload.variables.isEmpty ? "{}" : payload.variables)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(minHeight: 80)
+                }
+            } else {
+                ContentUnavailableView(
+                    "REST request",
+                    systemImage: "point.3.connected.trianglepath.dotted",
+                    description: Text("GraphQL query fields appear for GraphQL requests.")
+                )
             }
 
             Spacer()
@@ -199,4 +250,5 @@ private enum RequestEditorTab {
     case headers
     case auth
     case body
+    case graphQL
 }

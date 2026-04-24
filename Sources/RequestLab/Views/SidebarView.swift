@@ -10,7 +10,7 @@ struct SidebarView: View {
                 ForEach(store.workspace.collections) { collection in
                     DisclosureGroup {
                         ForEach(collection.requests) { request in
-                            Label(request.name, systemImage: "doc.text")
+                            Label(request.name, systemImage: request.kind == .graphQL ? "curlybraces" : "doc.text")
                                 .tag(Optional(request.id))
                         }
                     } label: {
