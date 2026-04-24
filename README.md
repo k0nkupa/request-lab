@@ -2,7 +2,7 @@
 
 RequestLab is a lightweight open-source macOS API client: a native SwiftUI alternative to Postman for REST and GraphQL workflows.
 
-This repository currently contains the early native app slice. It can build, launch, show the workspace shell, edit REST and GraphQL requests, round-trip typed workspace data through YAML, resolve environment variables, and execute requests through `URLSession`. Glamour later; load-bearing beams first.
+This repository currently contains the early native app slice. It can build, launch, open and save workspace folders, edit REST and GraphQL requests, keep secret variable values in Keychain, round-trip typed workspace data through YAML, resolve environment variables, and execute requests through `URLSession`. Glamour later; load-bearing beams first.
 
 ## Current Scope
 
@@ -13,6 +13,8 @@ This repository currently contains the early native app slice. It can build, lau
 - REST and GraphQL request execution with environment variable resolution.
 - GraphQL query, operation name, and variables payload support.
 - Request editing for type, method, URL, params, headers, auth, body, and GraphQL fields.
+- Open, Save, and Save As for local `.workspace` folders.
+- Keychain-backed values for secret environment variables.
 - Response status, duration, headers, body, and local history capture.
 - Sample workspace fixture at `Fixtures/SampleWorkspace.workspace`.
 - Swift tests for model and persistence behavior.
@@ -20,7 +22,6 @@ This repository currently contains the early native app slice. It can build, lau
 
 ## Planned Follow-Up Slices
 
-- Keychain-backed secrets.
 - Postman import.
 
 ## Requirements
@@ -65,6 +66,8 @@ Example.workspace/
 
 `.client/` stores local-only state such as request history. Treat it as app-private working state rather than shared workspace definition.
 
+Secret environment variables are intentionally written to shared YAML without values. The app stores their runtime values in macOS Keychain using the workspace, environment, and variable identifiers as the lookup key.
+
 ## Tests
 
 The current Swift test suite covers:
@@ -81,6 +84,7 @@ The current Swift test suite covers:
 - Mocked REST request execution.
 - Mocked GraphQL request execution.
 - Nested request editing helpers.
+- Keychain secret write/read/update/delete behavior.
 
 Run the suite with:
 

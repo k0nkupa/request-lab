@@ -6,6 +6,7 @@ public enum RequestLabError: Error, Equatable, LocalizedError, Sendable {
     case invalidWorkspace(String)
     case yamlDecodeFailed(String)
     case yamlEncodeFailed(String)
+    case keychainFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -19,6 +20,8 @@ public enum RequestLabError: Error, Equatable, LocalizedError, Sendable {
             "Failed to decode YAML: \(message)"
         case .yamlEncodeFailed(let message):
             "Failed to encode YAML: \(message)"
+        case .keychainFailed(let message):
+            "Keychain failed: \(message)"
         }
     }
 }

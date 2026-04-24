@@ -2,10 +2,23 @@ import RequestLabCore
 import SwiftUI
 
 struct InspectorView: View {
-    let request: APIRequest?
-    let environment: APIEnvironment?
-    let response: APIExecutionResult?
-    let errorMessage: String?
+    @Bindable var store: AppStore
+
+    private var request: APIRequest? {
+        store.selectedRequest
+    }
+
+    private var environment: APIEnvironment? {
+        store.selectedEnvironment
+    }
+
+    private var response: APIExecutionResult? {
+        store.latestResponse
+    }
+
+    private var errorMessage: String? {
+        store.executionErrorMessage
+    }
 
     var body: some View {
         ScrollView {
@@ -47,10 +60,24 @@ struct InspectorView: View {
                 LabeledContent("Name", value: environment.name)
 
                 ForEach(environment.variables) { variable in
-                    LabeledContent(variable.name) {
-                        Text(variable.isSecret ? "Secret" : (variable.value ?? "Empty"))
-                            .foregroundStyle(variable.isSecret ? .secondary : .primary)
-                            .textSelection(.enabled)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(variable.name, systemImage: variable.isSecret ? "key" : "textformat")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        if variable.isSecret {
+                            SecureField(
+                                "Stored in Keychain",
+                                text: secretBinding(environmentID: environment.id, variableID: variable.id)
+                            )
+                            .textFieldStyle(.roundedBorder)
+                        } else {
+                            TextField(
+                                "Value",
+                                text: variableBinding(environmentID: environment.id, variableID: variable.id)
+                            )
+                            .textFieldStyle(.roundedBorder)
+                        }
                     }
                 }
             } else {
@@ -77,5 +104,31 @@ struct InspectorView: View {
                 ContentUnavailableView("No response", systemImage: "tray")
             }
         }
+    }
+
+    private func variableBinding(environmentID: String, variableID: String) -> Binding<String> {
+        Binding(
+            get: {
+                environment?.variables.first { $0.id == variableID }?.value ?? ""
+            },
+            set: { value in
+                store.updateEnvironmentVariable(
+                    environmentID: environmentID,
+                    variableID: variableID,
+                    value: value.isEmpty ? nil : value
+                )
+            }
+        )
+    }
+
+    private func secretBinding(environmentID: String, variableID: String) -> Binding<String> {
+        Binding(
+            get: {
+                store.readSecretValue(environmentID: environmentID, variableID: variableID)
+            },
+            set: { value in
+                store.writeSecretValue(environmentID: environmentID, variableID: variableID, value: value)
+            }
+        )
     }
 }
