@@ -154,7 +154,7 @@ public struct APIAuth: Codable, Equatable, Sendable {
     }
 }
 
-public enum APIAuthType: String, Codable, Equatable, Sendable {
+public enum APIAuthType: String, Codable, CaseIterable, Equatable, Sendable {
     case none
     case bearer
     case basic

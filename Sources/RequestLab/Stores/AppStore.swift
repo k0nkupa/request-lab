@@ -36,6 +36,16 @@ final class AppStore {
         workspace.environments.first { $0.id == selectedEnvironmentID }
     }
 
+    func updateSelectedRequest(_ mutate: (inout APIRequest) -> Void) {
+        guard let selectedRequestID else {
+            return
+        }
+
+        _ = workspace.updateRequest(id: selectedRequestID, mutate: mutate)
+        latestResponse = nil
+        executionErrorMessage = nil
+    }
+
     func sendSelectedRequest() async {
         guard let request = selectedRequest else {
             executionErrorMessage = "Select a request before sending."

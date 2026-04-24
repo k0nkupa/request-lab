@@ -1,5 +1,5 @@
 import RequestLabCore
-import SwiftUI
+@preconcurrency import SwiftUI
 
 struct RequestEditorView: View {
     @Bindable var store: AppStore
@@ -17,13 +17,31 @@ struct RequestEditorView: View {
             Divider()
 
             TabView(selection: $selectedTab) {
-                keyValueTable(title: "Query parameters", values: request?.params ?? [:])
-                    .tabItem { Text("Params") }
-                    .tag(RequestEditorTab.params)
+                keyValueEditor(
+                    title: "Query parameters",
+                    placeholder: "limit=50\nstatus=open",
+                    values: binding(
+                        get: { request?.params ?? [:] },
+                        set: { params in
+                            store.updateSelectedRequest { $0.params = params }
+                        }
+                    )
+                )
+                .tabItem { Text("Params") }
+                .tag(RequestEditorTab.params)
 
-                keyValueTable(title: "Headers", values: request?.headers ?? [:])
-                    .tabItem { Text("Headers") }
-                    .tag(RequestEditorTab.headers)
+                keyValueEditor(
+                    title: "Headers",
+                    placeholder: "Accept=application/json\nX-Trace={{traceId}}",
+                    values: binding(
+                        get: { request?.headers ?? [:] },
+                        set: { headers in
+                            store.updateSelectedRequest { $0.headers = headers }
+                        }
+                    )
+                )
+                .tabItem { Text("Headers") }
+                .tag(RequestEditorTab.headers)
 
                 authView
                     .tabItem { Text("Auth") }
@@ -48,7 +66,15 @@ struct RequestEditorView: View {
 
     private var requestBar: some View {
         HStack(spacing: 8) {
-            Picker("Method", selection: .constant(request?.method ?? .get)) {
+            Picker("Type", selection: requestKindBinding) {
+                ForEach(APIRequestKind.allCases, id: \.self) { kind in
+                    Text(kind == .graphQL ? "GraphQL" : "REST").tag(kind)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 115)
+
+            Picker("Method", selection: requestMethodBinding) {
                 ForEach(HTTPMethod.allCases, id: \.self) { method in
                     Text(method.rawValue).tag(method)
                 }
@@ -56,15 +82,8 @@ struct RequestEditorView: View {
             .labelsHidden()
             .frame(width: 110)
 
-            TextField("Request URL", text: .constant(request?.url ?? ""))
+            TextField("Request URL", text: requestURLBinding)
                 .textFieldStyle(.roundedBorder)
-
-            if request?.kind == .graphQL {
-                Label("GraphQL", systemImage: "curlybraces")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(.titleAndIcon)
-            }
 
             Button("Send", systemImage: "paperplane") {
                 Task {
@@ -76,26 +95,35 @@ struct RequestEditorView: View {
     }
 
     private var authView: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Authentication")
                 .font(.headline)
 
-            if let auth = request?.auth {
-                LabeledContent("Type", value: auth.type.rawValue)
-
-                if let tokenVariable = auth.tokenVariable {
-                    LabeledContent("Token variable", value: tokenVariable)
+            Picker("Type", selection: authTypeBinding) {
+                ForEach(APIAuthType.allCases, id: \.self) { type in
+                    Text(type.displayName).tag(type)
                 }
+            }
+            .pickerStyle(.segmented)
 
-                if let usernameVariable = auth.usernameVariable {
-                    LabeledContent("Username variable", value: usernameVariable)
-                }
-
-                if let keyName = auth.keyName {
-                    LabeledContent("Key name", value: keyName)
-                }
-            } else {
+            switch request?.auth?.type ?? .none {
+            case .none:
                 ContentUnavailableView("No auth configured", systemImage: "lock.open")
+            case .bearer:
+                TextField("Token variable", text: authTokenVariableBinding)
+                    .textFieldStyle(.roundedBorder)
+            case .basic:
+                TextField("Username variable", text: authUsernameVariableBinding)
+                    .textFieldStyle(.roundedBorder)
+
+                TextField("Password variable", text: authPasswordVariableBinding)
+                    .textFieldStyle(.roundedBorder)
+            case .apiKey:
+                TextField("Header name", text: authKeyNameBinding)
+                    .textFieldStyle(.roundedBorder)
+
+                TextField("Value variable", text: authKeyValueVariableBinding)
+                    .textFieldStyle(.roundedBorder)
             }
 
             Spacer()
@@ -108,33 +136,28 @@ struct RequestEditorView: View {
             Text("GraphQL")
                 .font(.headline)
 
-            if let payload = request?.graphQL {
-                LabeledContent("Operation", value: payload.operationName ?? "Default")
+            if request?.kind == .graphQL {
+                TextField("Operation name", text: graphQLOperationNameBinding)
+                    .textFieldStyle(.roundedBorder)
 
                 GroupBox("Query") {
-                    ScrollView {
-                        Text(payload.query)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(minHeight: 120)
+                    TextEditor(text: graphQLQueryBinding)
+                        .font(.system(.body, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 150)
                 }
 
-                GroupBox("Variables") {
-                    ScrollView {
-                        Text(payload.variables.isEmpty ? "{}" : payload.variables)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(minHeight: 80)
+                GroupBox("Variables JSON") {
+                    TextEditor(text: graphQLVariablesBinding)
+                        .font(.system(.body, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 90)
                 }
             } else {
                 ContentUnavailableView(
                     "REST request",
                     systemImage: "point.3.connected.trianglepath.dotted",
-                    description: Text("GraphQL query fields appear for GraphQL requests.")
+                    description: Text("Switch the request type to GraphQL to edit query fields.")
                 )
             }
 
@@ -148,28 +171,42 @@ struct RequestEditorView: View {
             Text("Body")
                 .font(.headline)
 
-            Text(bodyDescription)
-                .font(.system(.body, design: .monospaced))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Picker("Body type", selection: bodyTypeBinding) {
+                ForEach(RequestBodyEditorType.allCases, id: \.self) { type in
+                    Text(type.displayName).tag(type)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(request?.kind == .graphQL)
+
+            if request?.kind == .graphQL {
+                ContentUnavailableView(
+                    "GraphQL owns the body",
+                    systemImage: "curlybraces",
+                    description: Text("GraphQL requests send the query and variables as JSON.")
+                )
+            } else if bodyTypeBinding.wrappedValue == .none {
+                ContentUnavailableView("No request body", systemImage: "doc")
+            } else if bodyTypeBinding.wrappedValue == .form {
+                keyValueEditor(
+                    title: "Form fields",
+                    placeholder: "email=tony@example.test\nscope=orders",
+                    values: formBodyBinding
+                )
+            } else {
+                TextEditor(text: bodyTextBinding)
+                    .font(.system(.body, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 180)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(.separator, lineWidth: 1)
+                    }
+            }
 
             Spacer()
         }
         .padding(.vertical)
-    }
-
-    private var bodyDescription: String {
-        switch request?.body {
-        case .some(.none), nil:
-            return "No request body"
-        case .raw(let value), .json(let value):
-            return value
-        case .form(let fields):
-            return fields
-                .sorted { $0.key < $1.key }
-                .map { "\($0.key)=\($0.value)" }
-                .joined(separator: "\n")
-        }
     }
 
     private var responsePanel: some View {
@@ -181,7 +218,7 @@ struct RequestEditorView: View {
                 Spacer()
 
                 if let response = store.latestResponse {
-                    Text("\(response.statusCode) • \(response.durationMilliseconds) ms")
+                    Text("\(response.statusCode) - \(response.durationMilliseconds) ms")
                         .font(.caption)
                         .foregroundStyle(response.statusCode < 400 ? .green : .orange)
                 }
@@ -217,31 +254,248 @@ struct RequestEditorView: View {
         .frame(minHeight: 220)
     }
 
-    private func keyValueTable(title: String, values: [String: String]) -> some View {
+    private func keyValueEditor(
+        title: String,
+        placeholder: String,
+        values: Binding<[String: String]>
+    ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.headline)
 
-            if values.isEmpty {
-                ContentUnavailableView("No values", systemImage: "list.bullet.rectangle")
-            } else {
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                    ForEach(values.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                        GridRow {
-                            Text(key)
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundStyle(.secondary)
-
-                            Text(value)
-                                .textSelection(.enabled)
-                        }
-                    }
+            TextEditor(text: keyValueTextBinding(values))
+                .font(.system(.body, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 160)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(.separator, lineWidth: 1)
                 }
-            }
+
+            Text(placeholder)
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Spacer()
         }
         .padding(.vertical)
+    }
+
+    private var requestKindBinding: Binding<APIRequestKind> {
+        binding(
+            get: { request?.kind ?? .rest },
+            set: { kind in
+                store.updateSelectedRequest { request in
+                    request.kind = kind
+
+                    if kind == .graphQL {
+                        request.method = .post
+                        request.graphQL = request.graphQL ?? APIGraphQLPayload(query: "", variables: "{}")
+                        request.body = .none
+                    } else {
+                        request.graphQL = nil
+                    }
+                }
+            }
+        )
+    }
+
+    private var requestMethodBinding: Binding<HTTPMethod> {
+        binding(
+            get: { request?.method ?? .get },
+            set: { method in
+                store.updateSelectedRequest { $0.method = method }
+            }
+        )
+    }
+
+    private var requestURLBinding: Binding<String> {
+        binding(
+            get: { request?.url ?? "" },
+            set: { url in
+                store.updateSelectedRequest { $0.url = url }
+            }
+        )
+    }
+
+    private var authTypeBinding: Binding<APIAuthType> {
+        binding(
+            get: { request?.auth?.type ?? .none },
+            set: { type in
+                store.updateSelectedRequest { request in
+                    request.auth = type == .none ? nil : APIAuth(type: type)
+                }
+            }
+        )
+    }
+
+    private var authTokenVariableBinding: Binding<String> {
+        authStringBinding(\.tokenVariable)
+    }
+
+    private var authUsernameVariableBinding: Binding<String> {
+        authStringBinding(\.usernameVariable)
+    }
+
+    private var authPasswordVariableBinding: Binding<String> {
+        authStringBinding(\.passwordVariable)
+    }
+
+    private var authKeyNameBinding: Binding<String> {
+        authStringBinding(\.keyName)
+    }
+
+    private var authKeyValueVariableBinding: Binding<String> {
+        authStringBinding(\.keyValueVariable)
+    }
+
+    private var graphQLQueryBinding: Binding<String> {
+        binding(
+            get: { request?.graphQL?.query ?? "" },
+            set: { value in
+                store.updateSelectedRequest { request in
+                    var payload = request.graphQL ?? APIGraphQLPayload(query: "")
+                    payload.query = value
+                    request.graphQL = payload
+                }
+            }
+        )
+    }
+
+    private var graphQLOperationNameBinding: Binding<String> {
+        binding(
+            get: { request?.graphQL?.operationName ?? "" },
+            set: { value in
+                store.updateSelectedRequest { request in
+                    var payload = request.graphQL ?? APIGraphQLPayload(query: "")
+                    payload.operationName = value.isEmpty ? nil : value
+                    request.graphQL = payload
+                }
+            }
+        )
+    }
+
+    private var graphQLVariablesBinding: Binding<String> {
+        binding(
+            get: { request?.graphQL?.variables ?? "{}" },
+            set: { value in
+                store.updateSelectedRequest { request in
+                    var payload = request.graphQL ?? APIGraphQLPayload(query: "")
+                    payload.variables = value
+                    request.graphQL = payload
+                }
+            }
+        )
+    }
+
+    private var bodyTypeBinding: Binding<RequestBodyEditorType> {
+        binding(
+            get: { RequestBodyEditorType(body: request?.body ?? .none) },
+            set: { type in
+                store.updateSelectedRequest { request in
+                    request.body = type.defaultBody
+                }
+            }
+        )
+    }
+
+    private var bodyTextBinding: Binding<String> {
+        binding(
+            get: {
+                switch request?.body {
+                case .some(.raw(let value)), .some(.json(let value)):
+                    value
+                case .some(.form(let fields)):
+                    Self.formatKeyValues(fields)
+                case .some(.none), nil:
+                    ""
+                }
+            },
+            set: { value in
+                store.updateSelectedRequest { request in
+                    switch request.body {
+                    case .json:
+                        request.body = .json(value)
+                    default:
+                        request.body = .raw(value)
+                    }
+                }
+            }
+        )
+    }
+
+    private var formBodyBinding: Binding<[String: String]> {
+        binding(
+            get: {
+                guard case .form(let fields) = request?.body else {
+                    return [:]
+                }
+
+                return fields
+            },
+            set: { fields in
+                store.updateSelectedRequest { $0.body = .form(fields) }
+            }
+        )
+    }
+
+    private func authStringBinding(_ keyPath: WritableKeyPath<APIAuth, String?>) -> Binding<String> {
+        binding(
+            get: { request?.auth?[keyPath: keyPath] ?? "" },
+            set: { value in
+                store.updateSelectedRequest { request in
+                    guard var auth = request.auth else {
+                        return
+                    }
+
+                    auth[keyPath: keyPath] = value.isEmpty ? nil : value
+                    request.auth = auth
+                }
+            }
+        )
+    }
+
+    private func keyValueTextBinding(_ values: Binding<[String: String]>) -> Binding<String> {
+        Binding(
+            get: { Self.formatKeyValues(values.wrappedValue) },
+            set: { values.wrappedValue = Self.parseKeyValues($0) }
+        )
+    }
+
+    @preconcurrency private func binding<Value>(
+        get: @escaping () -> Value,
+        set: @escaping (Value) -> Void
+    ) -> Binding<Value> {
+        Binding(
+            get: { @MainActor in
+                get()
+            },
+            set: { @MainActor value in
+                set(value)
+            }
+        )
+    }
+
+    private static func formatKeyValues(_ values: [String: String]) -> String {
+        values
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "\n")
+    }
+
+    private static func parseKeyValues(_ text: String) -> [String: String] {
+        text
+            .split(whereSeparator: \.isNewline)
+            .reduce(into: [:]) { values, line in
+                let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                guard let key = parts.first?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !key.isEmpty
+                else {
+                    return
+                }
+
+                values[key] = parts.dropFirst().first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            }
     }
 }
 
@@ -251,4 +505,65 @@ private enum RequestEditorTab {
     case auth
     case body
     case graphQL
+}
+
+private enum RequestBodyEditorType: CaseIterable {
+    case none
+    case raw
+    case json
+    case form
+
+    init(body: APIBody) {
+        switch body {
+        case .none:
+            self = .none
+        case .raw:
+            self = .raw
+        case .json:
+            self = .json
+        case .form:
+            self = .form
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .none:
+            "None"
+        case .raw:
+            "Raw"
+        case .json:
+            "JSON"
+        case .form:
+            "Form"
+        }
+    }
+
+    var defaultBody: APIBody {
+        switch self {
+        case .none:
+            .none
+        case .raw:
+            .raw("")
+        case .json:
+            .json("{}")
+        case .form:
+            .form([:])
+        }
+    }
+}
+
+private extension APIAuthType {
+    var displayName: String {
+        switch self {
+        case .none:
+            "None"
+        case .bearer:
+            "Bearer"
+        case .basic:
+            "Basic"
+        case .apiKey:
+            "API Key"
+        }
+    }
 }
