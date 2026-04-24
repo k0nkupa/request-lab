@@ -27,6 +27,27 @@ struct ContentView: View {
                 }
                 .help("Open workspace")
 
+                Menu("New", systemImage: "plus") {
+                    Button("Request") {
+                        store.createRequest()
+                    }
+
+                    Button("GraphQL Request") {
+                        store.createRequest(kind: .graphQL)
+                    }
+
+                    Divider()
+
+                    Button("Collection") {
+                        store.createCollection()
+                    }
+
+                    Button("Environment") {
+                        store.createEnvironment()
+                    }
+                }
+                .help("Create item")
+
                 Menu("Import", systemImage: "square.and.arrow.down") {
                     Button("Postman Collection") {
                         importPostmanCollectionPanel()
@@ -45,6 +66,12 @@ struct ContentView: View {
                 }
                 .disabled(store.selectedRequest == nil || store.isSending)
                 .help("Send request")
+
+                Button("Delete", systemImage: "trash", role: .destructive) {
+                    store.deleteSelectedRequest()
+                }
+                .disabled(store.selectedRequest == nil)
+                .help("Delete selected request")
 
                 Button("Save", systemImage: "square.and.arrow.down") {
                     if store.workspaceURL == nil {

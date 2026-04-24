@@ -98,6 +98,112 @@ final class AppStore {
         }
     }
 
+    func createCollection() {
+        let collection = APICollection(
+            id: "col_\(UUID().uuidString)",
+            name: nextName(base: "New Collection", existingNames: workspace.collections.map(\.name))
+        )
+
+        workspace.addCollection(collection)
+        clearExecutionState()
+    }
+
+    func deleteCollection(id collectionID: String) {
+        let deletedRequestIDs = workspace.collections
+            .first { $0.id == collectionID }?
+            .requests
+            .map(\.id) ?? []
+
+        guard workspace.deleteCollection(id: collectionID) else {
+            return
+        }
+
+        if let selectedRequestID, deletedRequestIDs.contains(selectedRequestID) {
+            self.selectedRequestID = workspace.collections.first?.requests.first?.id
+        }
+
+        clearExecutionState()
+    }
+
+    func createRequest(kind: APIRequestKind = .rest) {
+        if workspace.collections.isEmpty {
+            createCollection()
+        }
+
+        guard let collectionID = workspace.collectionID(containingRequestID: selectedRequestID ?? "")
+            ?? workspace.collections.first?.id
+        else {
+            return
+        }
+
+        let request = defaultRequest(kind: kind)
+        guard workspace.addRequest(request, toCollectionID: collectionID) else {
+            return
+        }
+
+        selectedRequestID = request.id
+        clearExecutionState()
+    }
+
+    func createRequest(kind: APIRequestKind = .rest, in collectionID: String) {
+        let request = defaultRequest(kind: kind)
+        guard workspace.addRequest(request, toCollectionID: collectionID) else {
+            return
+        }
+
+        selectedRequestID = request.id
+        clearExecutionState()
+    }
+
+    func deleteSelectedRequest() {
+        guard let selectedRequestID,
+              workspace.deleteRequest(id: selectedRequestID)
+        else {
+            return
+        }
+
+        self.selectedRequestID = workspace.collections.first?.requests.first?.id
+        clearExecutionState()
+    }
+
+    func deleteRequest(id requestID: String) {
+        guard workspace.deleteRequest(id: requestID) else {
+            return
+        }
+
+        if selectedRequestID == requestID {
+            selectedRequestID = workspace.collections.first?.requests.first?.id
+        }
+
+        clearExecutionState()
+    }
+
+    func createEnvironment() {
+        let environment = APIEnvironment(
+            id: "env_\(UUID().uuidString)",
+            name: nextName(base: "New Environment", existingNames: workspace.environments.map(\.name)),
+            variables: [
+                APIVariable(name: "baseUrl", value: "http://localhost:3000")
+            ]
+        )
+
+        workspace.addEnvironment(environment)
+        selectedEnvironmentID = environment.id
+        clearExecutionState()
+    }
+
+    func deleteEnvironment(id environmentID: String) {
+        guard workspace.deleteEnvironment(id: environmentID) else {
+            return
+        }
+
+        if selectedEnvironmentID == environmentID {
+            selectedEnvironmentID = workspace.environments.first?.id
+        }
+
+        clearExecutionState()
+    }
+
     func saveWorkspace() {
         guard let workspaceURL else {
             workspaceErrorMessage = "Choose a workspace location before saving."
@@ -123,8 +229,7 @@ final class AppStore {
         }
 
         _ = workspace.updateRequest(id: selectedRequestID, mutate: mutate)
-        latestResponse = nil
-        executionErrorMessage = nil
+        clearExecutionState()
     }
 
     func updateEnvironmentVariable(environmentID: String, variableID: String, value: String?) {
@@ -135,8 +240,7 @@ final class AppStore {
         }
 
         workspace.environments[environmentIndex].variables[variableIndex].value = value
-        latestResponse = nil
-        executionErrorMessage = nil
+        clearExecutionState()
     }
 
     func readSecretValue(environmentID: String, variableID: String) -> String {
@@ -164,8 +268,7 @@ final class AppStore {
                 )
             }
             workspaceErrorMessage = nil
-            latestResponse = nil
-            executionErrorMessage = nil
+            clearExecutionState()
         } catch {
             workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
@@ -230,6 +333,53 @@ final class AppStore {
             ),
             at: 0
         )
+    }
+
+    private func clearExecutionState() {
+        latestResponse = nil
+        executionErrorMessage = nil
+    }
+
+    private func defaultRequest(kind: APIRequestKind) -> APIRequest {
+        let name = nextName(
+            base: kind == .graphQL ? "New GraphQL Request" : "New Request",
+            existingNames: workspace.collections.flatMap(\.requests).map(\.name)
+        )
+
+        if kind == .graphQL {
+            return APIRequest(
+                id: "req_\(UUID().uuidString)",
+                name: name,
+                kind: .graphQL,
+                method: .post,
+                url: "{{baseUrl}}/graphql",
+                graphQL: APIGraphQLPayload(
+                    query: "query NewQuery {\n  viewer {\n    id\n  }\n}",
+                    operationName: "NewQuery",
+                    variables: "{}"
+                )
+            )
+        }
+
+        return APIRequest(
+            id: "req_\(UUID().uuidString)",
+            name: name,
+            method: .get,
+            url: "{{baseUrl}}"
+        )
+    }
+
+    private func nextName(base: String, existingNames: [String]) -> String {
+        guard existingNames.contains(base) else {
+            return base
+        }
+
+        var index = 2
+        while existingNames.contains("\(base) \(index)") {
+            index += 1
+        }
+
+        return "\(base) \(index)"
     }
 }
 

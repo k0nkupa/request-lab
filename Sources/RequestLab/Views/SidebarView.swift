@@ -12,9 +12,23 @@ struct SidebarView: View {
                         ForEach(collection.requests) { request in
                             Label(request.name, systemImage: request.kind == .graphQL ? "curlybraces" : "doc.text")
                                 .tag(Optional(request.id))
+                                .contextMenu {
+                                    Button("Delete Request", role: .destructive) {
+                                        store.deleteRequest(id: request.id)
+                                    }
+                                }
                         }
                     } label: {
                         Label(collection.name, systemImage: "folder")
+                    }
+                    .contextMenu {
+                        Button("New Request") {
+                            store.createRequest(in: collection.id)
+                        }
+
+                        Button("Delete Collection", role: .destructive) {
+                            store.deleteCollection(id: collection.id)
+                        }
                     }
                 }
             }
@@ -28,6 +42,10 @@ struct SidebarView: View {
                         .contextMenu {
                             Button("Use Environment") {
                                 store.selectedEnvironmentID = environment.id
+                            }
+
+                            Button("Delete Environment", role: .destructive) {
+                                store.deleteEnvironment(id: environment.id)
                             }
                         }
                         .onTapGesture {
