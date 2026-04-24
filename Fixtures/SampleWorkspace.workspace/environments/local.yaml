@@ -1,0 +1,10 @@
+id: env_local
+name: Local
+variables:
+- id: var_baseUrl
+  name: baseUrl
+  value: http://localhost:3000
+  isSecret: false
+- id: var_apiToken
+  name: apiToken
+  isSecret: true

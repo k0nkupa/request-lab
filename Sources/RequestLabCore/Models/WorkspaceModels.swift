@@ -1,0 +1,238 @@
+import Foundation
+
+public struct APIWorkspace: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var collections: [APICollection]
+    public var environments: [APIEnvironment]
+    public var history: [APIHistoryEntry]
+
+    public init(
+        id: String,
+        name: String,
+        collections: [APICollection] = [],
+        environments: [APIEnvironment] = [],
+        history: [APIHistoryEntry] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.collections = collections
+        self.environments = environments
+        self.history = history
+    }
+}
+
+public struct APICollection: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var requests: [APIRequest]
+
+    public init(id: String, name: String, requests: [APIRequest] = []) {
+        self.id = id
+        self.name = name
+        self.requests = requests
+    }
+}
+
+public struct APIRequest: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var method: HTTPMethod
+    public var url: String
+    public var headers: [String: String]
+    public var params: [String: String]
+    public var auth: APIAuth?
+    public var body: APIBody
+
+    public init(
+        id: String,
+        name: String,
+        method: HTTPMethod,
+        url: String,
+        headers: [String: String] = [:],
+        params: [String: String] = [:],
+        auth: APIAuth? = nil,
+        body: APIBody = .none
+    ) {
+        self.id = id
+        self.name = name
+        self.method = method
+        self.url = url
+        self.headers = headers
+        self.params = params
+        self.auth = auth
+        self.body = body
+    }
+}
+
+public enum HTTPMethod: String, Codable, CaseIterable, Equatable, Sendable {
+    case get = "GET"
+    case post = "POST"
+    case put = "PUT"
+    case patch = "PATCH"
+    case delete = "DELETE"
+    case head = "HEAD"
+    case options = "OPTIONS"
+}
+
+public struct APIAuth: Codable, Equatable, Sendable {
+    public var type: APIAuthType
+    public var tokenVariable: String?
+    public var usernameVariable: String?
+    public var passwordVariable: String?
+    public var keyName: String?
+    public var keyValueVariable: String?
+
+    public init(
+        type: APIAuthType,
+        tokenVariable: String? = nil,
+        usernameVariable: String? = nil,
+        passwordVariable: String? = nil,
+        keyName: String? = nil,
+        keyValueVariable: String? = nil
+    ) {
+        self.type = type
+        self.tokenVariable = tokenVariable
+        self.usernameVariable = usernameVariable
+        self.passwordVariable = passwordVariable
+        self.keyName = keyName
+        self.keyValueVariable = keyValueVariable
+    }
+}
+
+public enum APIAuthType: String, Codable, Equatable, Sendable {
+    case none
+    case bearer
+    case basic
+    case apiKey
+}
+
+public enum APIBody: Codable, Equatable, Sendable {
+    case none
+    case raw(String)
+    case json(String)
+    case form([String: String])
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case value
+        case fields
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+
+        switch type {
+        case "none":
+            self = .none
+        case "raw":
+            self = .raw(try container.decode(String.self, forKey: .value))
+        case "json":
+            self = .json(try container.decode(String.self, forKey: .value))
+        case "form":
+            self = .form(try container.decode([String: String].self, forKey: .fields))
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unsupported body type: \(type)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        switch self {
+        case .none:
+            try container.encode("none", forKey: .type)
+        case .raw(let value):
+            try container.encode("raw", forKey: .type)
+            try container.encode(value, forKey: .value)
+        case .json(let value):
+            try container.encode("json", forKey: .type)
+            try container.encode(value, forKey: .value)
+        case .form(let fields):
+            try container.encode("form", forKey: .type)
+            try container.encode(fields, forKey: .fields)
+        }
+    }
+}
+
+public struct APIEnvironment: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var variables: [APIVariable]
+
+    public init(id: String, name: String, variables: [APIVariable] = []) {
+        self.id = id
+        self.name = name
+        self.variables = variables
+    }
+}
+
+public struct APIVariable: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var value: String?
+    public var isSecret: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case value
+        case isSecret
+    }
+
+    public init(id: String? = nil, name: String, value: String? = nil, isSecret: Bool = false) {
+        self.id = id ?? "var_\(name)"
+        self.name = name
+        self.value = value
+        self.isSecret = isSecret
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let name = try container.decode(String.self, forKey: .name)
+
+        self.id = try container.decodeIfPresent(String.self, forKey: .id) ?? "var_\(name)"
+        self.name = name
+        self.value = try container.decodeIfPresent(String.self, forKey: .value)
+        self.isSecret = try container.decode(Bool.self, forKey: .isSecret)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(value, forKey: .value)
+        try container.encode(isSecret, forKey: .isSecret)
+    }
+}
+
+public struct APIHistoryEntry: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var requestId: String
+    public var method: HTTPMethod
+    public var url: String
+    public var statusCode: Int?
+    public var durationMilliseconds: Int?
+
+    public init(
+        id: String,
+        requestId: String,
+        method: HTTPMethod,
+        url: String,
+        statusCode: Int? = nil,
+        durationMilliseconds: Int? = nil
+    ) {
+        self.id = id
+        self.requestId = requestId
+        self.method = method
+        self.url = url
+        self.statusCode = statusCode
+        self.durationMilliseconds = durationMilliseconds
+    }
+}

@@ -1,0 +1,16 @@
+id: col_orders
+name: Orders
+requests:
+- id: req_orders_list
+  name: List orders
+  method: GET
+  url: "{{baseUrl}}/orders"
+  headers:
+    Accept: application/json
+  params:
+    limit: "50"
+  auth:
+    type: bearer
+    tokenVariable: apiToken
+  body:
+    type: none
