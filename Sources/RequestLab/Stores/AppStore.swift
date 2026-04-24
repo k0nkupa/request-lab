@@ -21,19 +21,23 @@ final class AppStore {
     private let workspaceFileStore: WorkspaceFileStore
     @ObservationIgnored
     private let keychainSecretStore: KeychainSecretStore
+    @ObservationIgnored
+    private let postmanImportService: PostmanImportService
 
     init(
         workspace: APIWorkspace = .empty,
         workspaceURL: URL? = nil,
         executionService: RequestExecutionService = RequestExecutionService(),
         workspaceFileStore: WorkspaceFileStore = WorkspaceFileStore(),
-        keychainSecretStore: KeychainSecretStore = KeychainSecretStore()
+        keychainSecretStore: KeychainSecretStore = KeychainSecretStore(),
+        postmanImportService: PostmanImportService = PostmanImportService()
     ) {
         self.workspace = workspace
         self.workspaceURL = workspaceURL
         self.executionService = executionService
         self.workspaceFileStore = workspaceFileStore
         self.keychainSecretStore = keychainSecretStore
+        self.postmanImportService = postmanImportService
         self.selectedRequestID = workspace.collections.first?.requests.first?.id
         self.selectedEnvironmentID = workspace.environments.first?.id
     }
@@ -61,6 +65,34 @@ final class AppStore {
             latestResponse = nil
             executionErrorMessage = nil
             workspaceErrorMessage = nil
+        } catch {
+            workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func importPostmanCollection(from url: URL) {
+        do {
+            let data = try Data(contentsOf: url)
+            let collection = try postmanImportService.importCollection(from: data)
+            workspace.collections.append(collection)
+            selectedRequestID = collection.requests.first?.id
+            workspaceErrorMessage = nil
+            latestResponse = nil
+            executionErrorMessage = nil
+        } catch {
+            workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func importPostmanEnvironment(from url: URL) {
+        do {
+            let data = try Data(contentsOf: url)
+            let environment = try postmanImportService.importEnvironment(from: data)
+            workspace.environments.append(environment)
+            selectedEnvironmentID = environment.id
+            workspaceErrorMessage = nil
+            latestResponse = nil
+            executionErrorMessage = nil
         } catch {
             workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }

@@ -2,7 +2,7 @@
 
 RequestLab is a lightweight open-source macOS API client: a native SwiftUI alternative to Postman for REST and GraphQL workflows.
 
-This repository currently contains the early native app slice. It can build, launch, open and save workspace folders, edit REST and GraphQL requests, keep secret variable values in Keychain, round-trip typed workspace data through YAML, resolve environment variables, and execute requests through `URLSession`. Glamour later; load-bearing beams first.
+This repository currently contains the early native app slice. It can build, launch, open and save workspace folders, import Postman collection/environment JSON, edit REST and GraphQL requests, keep secret variable values in Keychain, round-trip typed workspace data through YAML, resolve environment variables, and execute requests through `URLSession`. Glamour later; load-bearing beams first.
 
 ## Current Scope
 
@@ -14,6 +14,7 @@ This repository currently contains the early native app slice. It can build, lau
 - GraphQL query, operation name, and variables payload support.
 - Request editing for type, method, URL, params, headers, auth, body, and GraphQL fields.
 - Open, Save, and Save As for local `.workspace` folders.
+- Postman Collection v2.1 and environment JSON import.
 - Keychain-backed values for secret environment variables.
 - Response status, duration, headers, body, and local history capture.
 - Sample workspace fixture at `Fixtures/SampleWorkspace.workspace`.
@@ -22,7 +23,7 @@ This repository currently contains the early native app slice. It can build, lau
 
 ## Planned Follow-Up Slices
 
-- Postman import.
+- Request, collection, and environment creation/deletion UI.
 
 ## Requirements
 
@@ -85,6 +86,7 @@ The current Swift test suite covers:
 - Mocked GraphQL request execution.
 - Nested request editing helpers.
 - Keychain secret write/read/update/delete behavior.
+- Postman collection and environment import mapping.
 
 Run the suite with:
 

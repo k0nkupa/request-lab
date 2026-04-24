@@ -1,6 +1,7 @@
 import AppKit
 import RequestLabCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Bindable var store: AppStore
@@ -25,6 +26,17 @@ struct ContentView: View {
                     openWorkspacePanel()
                 }
                 .help("Open workspace")
+
+                Menu("Import", systemImage: "square.and.arrow.down") {
+                    Button("Postman Collection") {
+                        importPostmanCollectionPanel()
+                    }
+
+                    Button("Postman Environment") {
+                        importPostmanEnvironmentPanel()
+                    }
+                }
+                .help("Import Postman JSON")
 
                 Button("Send", systemImage: "paperplane") {
                     Task {
@@ -118,5 +130,32 @@ struct ContentView: View {
         }
 
         store.saveWorkspace(to: url)
+    }
+
+    private func importPostmanCollectionPanel() {
+        openJSONPanel(prompt: "Import") { url in
+            store.importPostmanCollection(from: url)
+        }
+    }
+
+    private func importPostmanEnvironmentPanel() {
+        openJSONPanel(prompt: "Import") { url in
+            store.importPostmanEnvironment(from: url)
+        }
+    }
+
+    private func openJSONPanel(prompt: String, onSelect: (URL) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        panel.prompt = prompt
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        onSelect(url)
     }
 }
