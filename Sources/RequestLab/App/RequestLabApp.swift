@@ -10,6 +10,7 @@ struct RequestLabApp: App {
         WindowGroup("RequestLab") {
             ContentView(store: store)
                 .frame(minWidth: 980, minHeight: 640)
+                .tint(RequestLabTheme.tint)
         }
         .commands {
             CommandMenu("Request") {

@@ -13,10 +13,12 @@ struct ContentView: View {
             HSplitView {
                 centerWorkspace
                     .frame(minWidth: 560)
+                    .background(RequestLabTheme.background)
 
                 if store.isInspectorVisible {
                     InspectorView(store: store)
-                    .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
+                        .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
+                        .background(RequestLabTheme.surface)
                 }
             }
         }
@@ -166,6 +168,7 @@ struct ContentView: View {
             Label(store.environmentPairTitle, systemImage: "server.rack")
         }
         .frame(minWidth: 180)
+        .tint(RequestLabTheme.environment)
         .help("Select global and collection environments")
     }
 
