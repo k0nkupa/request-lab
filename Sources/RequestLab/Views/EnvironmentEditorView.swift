@@ -45,30 +45,44 @@ struct EnvironmentEditorView: View {
     }
 
     private func environmentForm(_ environment: APIEnvironment) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            LabeledContent("Name", value: environment.name)
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Name")
+                    .font(.headline)
 
-            if environment.variables.isEmpty {
-                ContentUnavailableView("No variables", systemImage: "textformat")
-            } else {
-                ForEach(environment.variables) { variable in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label(variable.name, systemImage: variable.isSecret ? "key" : "textformat")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                TextField(
+                    "Environment name",
+                    text: environmentNameBinding(environmentID: environment.id)
+                )
+                .textFieldStyle(.roundedBorder)
+            }
 
-                        if variable.isSecret {
-                            SecureField(
-                                "Stored in Keychain",
-                                text: secretBinding(environmentID: environment.id, variableID: variable.id)
-                            )
-                            .textFieldStyle(.roundedBorder)
-                        } else {
-                            TextField(
-                                "Value",
-                                text: variableBinding(environmentID: environment.id, variableID: variable.id)
-                            )
-                            .textFieldStyle(.roundedBorder)
+            Divider()
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Variables")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Button {
+                        store.addEnvironmentVariable(environmentID: environment.id)
+                    } label: {
+                        Label("Add variable", systemImage: "plus")
+                    }
+                }
+
+                if environment.variables.isEmpty {
+                    ContentUnavailableView(
+                        "No variables",
+                        systemImage: "textformat",
+                        description: Text("Add a key and value for this environment.")
+                    )
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(environment.variables) { variable in
+                            variableRow(environmentID: environment.id, variable: variable)
                         }
                     }
                 }
@@ -76,6 +90,69 @@ struct EnvironmentEditorView: View {
 
             Spacer()
         }
+    }
+
+    private func variableRow(environmentID: String, variable: APIVariable) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: variable.isSecret ? "key.horizontal" : "textformat")
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+
+            TextField(
+                "Key",
+                text: variableNameBinding(environmentID: environmentID, variableID: variable.id)
+            )
+            .textFieldStyle(.roundedBorder)
+            .frame(minWidth: 160, idealWidth: 220, maxWidth: 280)
+
+            if variable.isSecret {
+                SecureField(
+                    "Stored in Keychain",
+                    text: secretBinding(environmentID: environmentID, variableID: variable.id)
+                )
+                .textFieldStyle(.roundedBorder)
+            } else {
+                TextField(
+                    "Value",
+                    text: variableBinding(environmentID: environmentID, variableID: variable.id)
+                )
+                .textFieldStyle(.roundedBorder)
+            }
+
+            Button(role: .destructive) {
+                store.deleteEnvironmentVariable(environmentID: environmentID, variableID: variable.id)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("Delete variable")
+        }
+    }
+
+    private func environmentNameBinding(environmentID: String) -> Binding<String> {
+        Binding(
+            get: {
+                store.environmentName(environmentID: environmentID)
+            },
+            set: { name in
+                store.updateEnvironmentName(environmentID: environmentID, name: name)
+            }
+        )
+    }
+
+    private func variableNameBinding(environmentID: String, variableID: String) -> Binding<String> {
+        Binding(
+            get: {
+                store.variableName(environmentID: environmentID, variableID: variableID)
+            },
+            set: { name in
+                store.updateEnvironmentVariableName(
+                    environmentID: environmentID,
+                    variableID: variableID,
+                    name: name
+                )
+            }
+        )
     }
 
     private func variableBinding(environmentID: String, variableID: String) -> Binding<String> {

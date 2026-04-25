@@ -85,6 +85,76 @@ public extension APIWorkspace {
         return true
     }
 
+    mutating func updateEnvironment(id environmentID: String, mutate: (inout APIEnvironment) -> Void) -> Bool {
+        if let environmentIndex = environments.firstIndex(where: { $0.id == environmentID }) {
+            mutate(&environments[environmentIndex])
+            return true
+        }
+
+        for collectionIndex in collections.indices {
+            guard let environmentIndex = collections[collectionIndex].environments.firstIndex(where: { $0.id == environmentID }) else {
+                continue
+            }
+
+            mutate(&collections[collectionIndex].environments[environmentIndex])
+            return true
+        }
+
+        return false
+    }
+
+    mutating func addEnvironmentVariable(_ variable: APIVariable, toEnvironmentID environmentID: String) -> Bool {
+        updateEnvironment(id: environmentID) { environment in
+            environment.variables.append(variable)
+        }
+    }
+
+    mutating func updateEnvironmentVariable(
+        environmentID: String,
+        variableID: String,
+        mutate: (inout APIVariable) -> Void
+    ) -> Bool {
+        if let environmentIndex = environments.firstIndex(where: { $0.id == environmentID }),
+           let variableIndex = environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
+        {
+            mutate(&environments[environmentIndex].variables[variableIndex])
+            return true
+        }
+
+        for collectionIndex in collections.indices {
+            guard let environmentIndex = collections[collectionIndex].environments.firstIndex(where: { $0.id == environmentID }),
+                  let variableIndex = collections[collectionIndex].environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
+            else {
+                continue
+            }
+
+            mutate(&collections[collectionIndex].environments[environmentIndex].variables[variableIndex])
+            return true
+        }
+
+        return false
+    }
+
+    mutating func deleteEnvironmentVariable(environmentID: String, variableID: String) -> APIVariable? {
+        if let environmentIndex = environments.firstIndex(where: { $0.id == environmentID }),
+           let variableIndex = environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
+        {
+            return environments[environmentIndex].variables.remove(at: variableIndex)
+        }
+
+        for collectionIndex in collections.indices {
+            guard let environmentIndex = collections[collectionIndex].environments.firstIndex(where: { $0.id == environmentID }),
+                  let variableIndex = collections[collectionIndex].environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
+            else {
+                continue
+            }
+
+            return collections[collectionIndex].environments[environmentIndex].variables.remove(at: variableIndex)
+        }
+
+        return nil
+    }
+
     mutating func addEnvironment(_ environment: APIEnvironment) {
         environments.append(environment)
     }

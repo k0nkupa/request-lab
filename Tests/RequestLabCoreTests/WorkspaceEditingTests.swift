@@ -100,6 +100,89 @@ struct WorkspaceEditingTests {
         #expect(workspace.collections.first?.environments.isEmpty == true)
     }
 
+    @Test("updates environments and variables across global and collection scopes")
+    func updatesEnvironmentsAndVariablesAcrossScopes() throws {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(
+                    id: "col",
+                    name: "Collection",
+                    environments: [
+                        APIEnvironment(
+                            id: "env_collection",
+                            name: "Collection Local",
+                            variables: [
+                                APIVariable(id: "var_base", name: "baseUrl", value: "http://localhost:3000")
+                            ]
+                        )
+                    ]
+                )
+            ],
+            environments: [
+                APIEnvironment(id: "env_global", name: "Global Local")
+            ]
+        )
+
+        let didRenameGlobal = workspace.updateEnvironment(id: "env_global") { environment in
+            environment.name = "Global Dev"
+        }
+        #expect(didRenameGlobal)
+        #expect(workspace.environments.first?.name == "Global Dev")
+
+        let didAddVariable = workspace.addEnvironmentVariable(
+            APIVariable(id: "var_token", name: "apiToken", value: nil, isSecret: true),
+            toEnvironmentID: "env_collection"
+        )
+        #expect(didAddVariable)
+
+        let didRenameVariable = workspace.updateEnvironmentVariable(
+            environmentID: "env_collection",
+            variableID: "var_base"
+        ) { variable in
+            variable.name = "BaseUrl"
+            variable.value = "http://localhost:4000"
+        }
+        #expect(didRenameVariable)
+
+        let collectionEnvironment = try #require(workspace.collections.first?.environments.first)
+        #expect(collectionEnvironment.variables.map(\.name) == ["BaseUrl", "apiToken"])
+        #expect(collectionEnvironment.variables.first?.value == "http://localhost:4000")
+
+        let deletedVariable = workspace.deleteEnvironmentVariable(
+            environmentID: "env_collection",
+            variableID: "var_token"
+        )
+        #expect(deletedVariable?.name == "apiToken")
+        #expect(workspace.collections.first?.environments.first?.variables.map(\.name) == ["BaseUrl"])
+    }
+
+    @Test("environment variable edits fail for missing ids")
+    func environmentVariableEditsFailForMissingIDs() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            environments: [
+                APIEnvironment(
+                    id: "env_global",
+                    name: "Global Local",
+                    variables: [APIVariable(id: "var_base", name: "baseUrl")]
+                )
+            ]
+        )
+
+        let didAddMissingVariable = workspace.addEnvironmentVariable(APIVariable(name: "newKey"), toEnvironmentID: "env_missing")
+        let didUpdateMissingVariable = workspace.updateEnvironmentVariable(environmentID: "env_global", variableID: "var_missing") { variable in
+            variable.name = "BaseUrl"
+        }
+        let deletedMissingVariable = workspace.deleteEnvironmentVariable(environmentID: "env_global", variableID: "var_missing")
+
+        #expect(!didAddMissingVariable)
+        #expect(!didUpdateMissingVariable)
+        #expect(deletedMissingVariable == nil)
+    }
+
     @Test("returns false when request id is missing")
     func missingRequestReturnsFalse() {
         var workspace = APIWorkspace(id: "wrk_empty", name: "Empty")

@@ -411,26 +411,78 @@ final class AppStore {
         clearExecutionState()
     }
 
+    func updateEnvironmentName(environmentID: String, name: String) {
+        guard workspace.updateEnvironment(id: environmentID, mutate: { environment in
+            environment.name = name
+        }) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
+    func addEnvironmentVariable(environmentID: String) {
+        let existingNames = environment(id: environmentID)?.variables.map(\.name) ?? []
+        let variable = APIVariable(
+            id: "var_\(UUID().uuidString)",
+            name: nextName(base: "newKey", existingNames: existingNames),
+            value: "",
+            isSecret: false
+        )
+
+        guard workspace.addEnvironmentVariable(variable, toEnvironmentID: environmentID) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
+    func updateEnvironmentVariableName(environmentID: String, variableID: String, name: String) {
+        guard workspace.updateEnvironmentVariable(environmentID: environmentID, variableID: variableID, mutate: { variable in
+            variable.name = name
+        }) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
     func updateEnvironmentVariable(environmentID: String, variableID: String, value: String?) {
-        if let environmentIndex = workspace.environments.firstIndex(where: { $0.id == environmentID }),
-           let variableIndex = workspace.environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
-        {
-            workspace.environments[environmentIndex].variables[variableIndex].value = value
-            clearExecutionState()
+        guard workspace.updateEnvironmentVariable(environmentID: environmentID, variableID: variableID, mutate: { variable in
+            variable.value = value
+        }) else {
             return
         }
 
-        for collectionIndex in workspace.collections.indices {
-            guard let environmentIndex = workspace.collections[collectionIndex].environments.firstIndex(where: { $0.id == environmentID }),
-                  let variableIndex = workspace.collections[collectionIndex].environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
-            else {
-                continue
-            }
+        clearExecutionState()
+    }
 
-            workspace.collections[collectionIndex].environments[environmentIndex].variables[variableIndex].value = value
-            clearExecutionState()
+    func deleteEnvironmentVariable(environmentID: String, variableID: String) {
+        let deletedVariable = workspace.deleteEnvironmentVariable(environmentID: environmentID, variableID: variableID)
+        guard let deletedVariable else {
             return
         }
+
+        if deletedVariable.isSecret {
+            try? keychainSecretStore.deleteSecret(
+                workspaceID: workspace.id,
+                environmentID: environmentID,
+                variableID: variableID
+            )
+        }
+
+        clearExecutionState()
+    }
+
+    func environmentName(environmentID: String) -> String {
+        environment(id: environmentID)?.name ?? ""
+    }
+
+    func variableName(environmentID: String, variableID: String) -> String {
+        environment(id: environmentID)?
+            .variables
+            .first { $0.id == variableID }?
+            .name ?? ""
     }
 
     func variableValue(environmentID: String, variableID: String) -> String {
