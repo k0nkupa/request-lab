@@ -20,6 +20,7 @@ This repository currently contains the early native app slice. It can build, lau
 - Response body and header tabs.
 - Keyboard shortcuts for common actions.
 - Global and collection-scoped environments with collection variables overriding globals on send.
+- Center-pane environment editing with read-only environment summaries in the inspector.
 - Keychain-backed values for secret environment variables.
 - Response status, duration, headers, body, and local history capture.
 - Monochrome macOS app icon generated from the `RL` mark.

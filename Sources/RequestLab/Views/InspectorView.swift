@@ -103,32 +103,6 @@ struct InspectorView: View {
         }
     }
 
-    private func variableBinding(environmentID: String, variableID: String) -> Binding<String> {
-        Binding(
-            get: {
-                store.variableValue(environmentID: environmentID, variableID: variableID)
-            },
-            set: { value in
-                store.updateEnvironmentVariable(
-                    environmentID: environmentID,
-                    variableID: variableID,
-                    value: value.isEmpty ? nil : value
-                )
-            }
-        )
-    }
-
-    private func secretBinding(environmentID: String, variableID: String) -> Binding<String> {
-        Binding(
-            get: {
-                store.readSecretValue(environmentID: environmentID, variableID: variableID)
-            },
-            set: { value in
-                store.writeSecretValue(environmentID: environmentID, variableID: variableID, value: value)
-            }
-        )
-    }
-
     private func environmentFields(_ environment: APIEnvironment) -> some View {
         Group {
             LabeledContent("Name", value: environment.name)
@@ -139,21 +113,22 @@ struct InspectorView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    if variable.isSecret {
-                        SecureField(
-                            "Stored in Keychain",
-                            text: secretBinding(environmentID: environment.id, variableID: variable.id)
-                        )
-                        .textFieldStyle(.roundedBorder)
-                    } else {
-                        TextField(
-                            "Value",
-                            text: variableBinding(environmentID: environment.id, variableID: variable.id)
-                        )
-                        .textFieldStyle(.roundedBorder)
-                    }
+                    Text(displayValue(for: variable, in: environment))
+                        .font(.caption)
+                        .textSelection(.enabled)
+                        .foregroundStyle(.primary)
                 }
             }
         }
+    }
+
+    private func displayValue(for variable: APIVariable, in environment: APIEnvironment) -> String {
+        if variable.isSecret {
+            return store.readSecretValue(environmentID: environment.id, variableID: variable.id).isEmpty
+                ? "Stored in Keychain"
+                : "••••••"
+        }
+
+        return variable.value ?? ""
     }
 }

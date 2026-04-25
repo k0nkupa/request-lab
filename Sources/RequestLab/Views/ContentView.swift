@@ -11,7 +11,7 @@ struct ContentView: View {
             SidebarView(store: store)
         } detail: {
             HSplitView {
-                RequestEditorView(store: store)
+                centerWorkspace
                     .frame(minWidth: 560)
 
                 if store.isInspectorVisible {
@@ -140,7 +140,7 @@ struct ContentView: View {
 
                 ForEach(store.workspace.environments) { environment in
                     Button(environment.name) {
-                        store.selectGlobalEnvironment(id: environment.id)
+                        store.selectCenterPane(.globalEnvironment(environment.id))
                     }
                 }
             }
@@ -153,7 +153,9 @@ struct ContentView: View {
 
                     ForEach(collection.environments) { environment in
                         Button(environment.name) {
-                            store.selectCollectionEnvironment(id: environment.id, for: collection.id)
+                            store.selectCenterPane(
+                                .collectionEnvironment(collectionID: collection.id, environmentID: environment.id)
+                            )
                         }
                     }
                 } else {
@@ -165,6 +167,16 @@ struct ContentView: View {
         }
         .frame(minWidth: 180)
         .help("Select global and collection environments")
+    }
+
+    @ViewBuilder
+    private var centerWorkspace: some View {
+        switch store.selectedCenterPane {
+        case .globalEnvironment, .collectionEnvironment:
+            EnvironmentEditorView(store: store)
+        case .request, .none:
+            RequestEditorView(store: store)
+        }
     }
 
     private func openWorkspacePanel() {

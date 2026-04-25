@@ -5,18 +5,31 @@ struct SidebarView: View {
     @Bindable var store: AppStore
 
     var body: some View {
-        List(selection: $store.selectedRequestID) {
+        List(selection: selection) {
             Section("Collections") {
                 ForEach(store.workspace.collections) { collection in
                     DisclosureGroup {
                         ForEach(collection.environments) { environment in
                             Label(environment.name, systemImage: "server.rack")
+                                .tag(
+                                    Optional(
+                                        CenterPaneSelection.collectionEnvironment(
+                                            collectionID: collection.id,
+                                            environmentID: environment.id
+                                        )
+                                    )
+                                )
                                 .foregroundStyle(
                                     environment.id == store.selectedCollectionEnvironment?.id ? .primary : .secondary
                                 )
                                 .contextMenu {
                                     Button("Use Environment") {
-                                        store.selectCollectionEnvironment(id: environment.id, for: collection.id)
+                                        store.selectCenterPane(
+                                            .collectionEnvironment(
+                                                collectionID: collection.id,
+                                                environmentID: environment.id
+                                            )
+                                        )
                                     }
 
                                     Button("Delete Environment", role: .destructive) {
@@ -24,13 +37,18 @@ struct SidebarView: View {
                                     }
                                 }
                                 .onTapGesture {
-                                    store.selectCollectionEnvironment(id: environment.id, for: collection.id)
+                                    store.selectCenterPane(
+                                        .collectionEnvironment(
+                                            collectionID: collection.id,
+                                            environmentID: environment.id
+                                        )
+                                    )
                                 }
                         }
 
                         ForEach(collection.requests) { request in
                             Label(request.name, systemImage: request.kind == .graphQL ? "curlybraces" : "doc.text")
-                                .tag(Optional(request.id))
+                                .tag(Optional(CenterPaneSelection.request(request.id)))
                                 .contextMenu {
                                     Button("Delete Request", role: .destructive) {
                                         store.deleteRequest(id: request.id)
@@ -59,12 +77,13 @@ struct SidebarView: View {
             Section("Global Environments") {
                 ForEach(store.workspace.environments) { environment in
                     Label(environment.name, systemImage: "server.rack")
+                        .tag(Optional(CenterPaneSelection.globalEnvironment(environment.id)))
                         .foregroundStyle(
                             environment.id == store.selectedGlobalEnvironmentID ? .primary : .secondary
                         )
                         .contextMenu {
                             Button("Use Environment") {
-                                store.selectGlobalEnvironment(id: environment.id)
+                                store.selectCenterPane(.globalEnvironment(environment.id))
                             }
 
                             Button("Delete Environment", role: .destructive) {
@@ -72,7 +91,7 @@ struct SidebarView: View {
                             }
                         }
                         .onTapGesture {
-                            store.selectGlobalEnvironment(id: environment.id)
+                            store.selectCenterPane(.globalEnvironment(environment.id))
                         }
                 }
             }
@@ -93,5 +112,12 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle(store.editorTitle)
+    }
+
+    private var selection: Binding<CenterPaneSelection?> {
+        Binding(
+            get: { store.selectedCenterPane },
+            set: { store.selectCenterPane($0) }
+        )
     }
 }

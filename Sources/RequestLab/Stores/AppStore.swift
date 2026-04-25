@@ -8,6 +8,7 @@ final class AppStore {
     var workspace: APIWorkspace
     var workspaceURL: URL?
     var selectedRequestID: String?
+    var selectedCenterPane: CenterPaneSelection?
     var selectedGlobalEnvironmentID: String?
     var selectedCollectionEnvironmentIDByCollectionID: [String: String] = [:]
     var collectionsWithNoEnvironmentSelection: Set<String> = []
@@ -45,6 +46,7 @@ final class AppStore {
         self.postmanImportService = postmanImportService
         self.requestValidationService = requestValidationService
         self.selectedRequestID = workspace.collections.first?.requests.first?.id
+        self.selectedCenterPane = selectedRequestID.map(CenterPaneSelection.request)
         self.selectedGlobalEnvironmentID = workspace.environments.first?.id
     }
 
@@ -103,6 +105,30 @@ final class AppStore {
         return names.isEmpty ? "No environment" : names.joined(separator: " + ")
     }
 
+    var selectedEnvironmentForEditing: APIEnvironment? {
+        switch selectedCenterPane {
+        case .globalEnvironment(let environmentID):
+            workspace.environments.first { $0.id == environmentID }
+        case .collectionEnvironment(_, let environmentID):
+            workspace.collections
+                .flatMap(\.environments)
+                .first { $0.id == environmentID }
+        case .request, .none:
+            nil
+        }
+    }
+
+    var selectedEnvironmentEditorTitle: String {
+        switch selectedCenterPane {
+        case .globalEnvironment:
+            "Global Environment"
+        case .collectionEnvironment:
+            "Collection Environment"
+        case .request, .none:
+            "Environment"
+        }
+    }
+
     var workspaceLocationTitle: String {
         workspaceURL?.lastPathComponent ?? "Unsaved workspace"
     }
@@ -112,6 +138,7 @@ final class AppStore {
             workspace = try workspaceFileStore.load(from: url)
             workspaceURL = url
             selectedRequestID = workspace.collections.first?.requests.first?.id
+            selectedCenterPane = selectedRequestID.map(CenterPaneSelection.request)
             selectedGlobalEnvironmentID = workspace.environments.first?.id
             selectedCollectionEnvironmentIDByCollectionID = [:]
             collectionsWithNoEnvironmentSelection = []
@@ -129,6 +156,7 @@ final class AppStore {
             let collection = try postmanImportService.importCollection(from: data)
             workspace.collections.append(collection)
             selectedRequestID = collection.requests.first?.id
+            selectedCenterPane = selectedRequestID.map(CenterPaneSelection.request)
             workspaceErrorMessage = nil
             latestResponse = nil
             executionErrorMessage = nil
@@ -143,6 +171,7 @@ final class AppStore {
             let environment = try postmanImportService.importEnvironment(from: data)
             workspace.environments.append(environment)
             selectedGlobalEnvironmentID = environment.id
+            selectedCenterPane = .globalEnvironment(environment.id)
             workspaceErrorMessage = nil
             latestResponse = nil
             executionErrorMessage = nil
@@ -173,6 +202,11 @@ final class AppStore {
 
         if let selectedRequestID, deletedRequestIDs.contains(selectedRequestID) {
             self.selectedRequestID = workspace.collections.first?.requests.first?.id
+            selectedCenterPane = self.selectedRequestID.map(CenterPaneSelection.request)
+        } else if case .collectionEnvironment(let selectedCollectionID, _) = selectedCenterPane,
+                  selectedCollectionID == collectionID
+        {
+            selectedCenterPane = (workspace.collections.first?.requests.first?.id).map(CenterPaneSelection.request)
         }
         selectedCollectionEnvironmentIDByCollectionID.removeValue(forKey: collectionID)
         collectionsWithNoEnvironmentSelection.remove(collectionID)
@@ -197,6 +231,7 @@ final class AppStore {
         }
 
         selectedRequestID = request.id
+        selectedCenterPane = .request(request.id)
         clearExecutionState()
     }
 
@@ -207,6 +242,7 @@ final class AppStore {
         }
 
         selectedRequestID = request.id
+        selectedCenterPane = .request(request.id)
         clearExecutionState()
     }
 
@@ -218,6 +254,7 @@ final class AppStore {
         }
 
         self.selectedRequestID = workspace.collections.first?.requests.first?.id
+        selectedCenterPane = self.selectedRequestID.map(CenterPaneSelection.request)
         clearExecutionState()
     }
 
@@ -228,6 +265,7 @@ final class AppStore {
 
         if selectedRequestID == requestID {
             selectedRequestID = workspace.collections.first?.requests.first?.id
+            selectedCenterPane = selectedRequestID.map(CenterPaneSelection.request)
         }
 
         clearExecutionState()
@@ -244,6 +282,7 @@ final class AppStore {
 
         workspace.addEnvironment(environment)
         selectedGlobalEnvironmentID = environment.id
+        selectedCenterPane = .globalEnvironment(environment.id)
         clearExecutionState()
     }
 
@@ -266,6 +305,7 @@ final class AppStore {
 
         selectedCollectionEnvironmentIDByCollectionID[collectionID] = environment.id
         collectionsWithNoEnvironmentSelection.remove(collectionID)
+        selectedCenterPane = .collectionEnvironment(collectionID: collectionID, environmentID: environment.id)
         clearExecutionState()
     }
 
@@ -276,6 +316,12 @@ final class AppStore {
 
         if selectedGlobalEnvironmentID == environmentID {
             selectedGlobalEnvironmentID = workspace.environments.first?.id
+        }
+
+        if case .globalEnvironment(let selectedEnvironmentID) = selectedCenterPane,
+           selectedEnvironmentID == environmentID
+        {
+            selectedCenterPane = selectedRequestID.map(CenterPaneSelection.request)
         }
 
         clearExecutionState()
@@ -290,7 +336,34 @@ final class AppStore {
             selectedCollectionEnvironmentIDByCollectionID.removeValue(forKey: collectionID)
         }
 
+        if case .collectionEnvironment(let selectedCollectionID, let selectedEnvironmentID) = selectedCenterPane,
+           selectedCollectionID == collectionID,
+           selectedEnvironmentID == environmentID
+        {
+            selectedCenterPane = selectedRequestID.map(CenterPaneSelection.request)
+        }
+
         clearExecutionState()
+    }
+
+    func selectCenterPane(_ selection: CenterPaneSelection?) {
+        guard let selection else {
+            selectedCenterPane = nil
+            return
+        }
+
+        switch selection {
+        case .request(let requestID):
+            selectedRequestID = requestID
+            selectedCenterPane = selection
+            clearExecutionState()
+        case .globalEnvironment(let environmentID):
+            selectedCenterPane = selection
+            selectGlobalEnvironment(id: environmentID)
+        case .collectionEnvironment(let collectionID, let environmentID):
+            selectedCenterPane = selection
+            selectCollectionEnvironment(id: environmentID, for: collectionID)
+        }
     }
 
     func selectGlobalEnvironment(id environmentID: String?) {
@@ -523,6 +596,12 @@ final class AppStore {
 
         return "\(base) \(index)"
     }
+}
+
+enum CenterPaneSelection: Hashable {
+    case request(String)
+    case globalEnvironment(String)
+    case collectionEnvironment(collectionID: String, environmentID: String)
 }
 
 extension APIWorkspace {
