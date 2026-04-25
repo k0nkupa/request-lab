@@ -12,11 +12,9 @@ struct SidebarView: View {
                         ForEach(collection.environments) { environment in
                             Label(environment.name, systemImage: "server.rack")
                                 .tag(
-                                    Optional(
-                                        CenterPaneSelection.collectionEnvironment(
-                                            collectionID: collection.id,
-                                            environmentID: environment.id
-                                        )
+                                    CenterPaneSelection.collectionEnvironment(
+                                        collectionID: collection.id,
+                                        environmentID: environment.id
                                     )
                                 )
                                 .foregroundStyle(
@@ -36,19 +34,11 @@ struct SidebarView: View {
                                         store.deleteCollectionEnvironment(id: environment.id, fromCollectionID: collection.id)
                                     }
                                 }
-                                .onTapGesture {
-                                    store.selectCenterPane(
-                                        .collectionEnvironment(
-                                            collectionID: collection.id,
-                                            environmentID: environment.id
-                                        )
-                                    )
-                                }
                         }
 
                         ForEach(collection.requests) { request in
                             Label(request.name, systemImage: request.kind == .graphQL ? "curlybraces" : "doc.text")
-                                .tag(Optional(CenterPaneSelection.request(request.id)))
+                                .tag(CenterPaneSelection.request(request.id))
                                 .contextMenu {
                                     Button("Delete Request", role: .destructive) {
                                         store.deleteRequest(id: request.id)
@@ -77,7 +67,7 @@ struct SidebarView: View {
             Section("Global Environments") {
                 ForEach(store.workspace.environments) { environment in
                     Label(environment.name, systemImage: "server.rack")
-                        .tag(Optional(CenterPaneSelection.globalEnvironment(environment.id)))
+                        .tag(CenterPaneSelection.globalEnvironment(environment.id))
                         .foregroundStyle(
                             environment.id == store.selectedGlobalEnvironmentID ? .primary : .secondary
                         )
@@ -89,9 +79,6 @@ struct SidebarView: View {
                             Button("Delete Environment", role: .destructive) {
                                 store.deleteEnvironment(id: environment.id)
                             }
-                        }
-                        .onTapGesture {
-                            store.selectCenterPane(.globalEnvironment(environment.id))
                         }
                 }
             }
