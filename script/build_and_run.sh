@@ -5,9 +5,12 @@ MODE="${1:-run}"
 APP_NAME="RequestLab"
 BUNDLE_ID="dev.requestlab.app"
 MIN_SYSTEM_VERSION="14.0"
+APP_VERSION="${APP_VERSION:-0.1.0}"
+APP_BUILD="${APP_BUILD:-dev}"
+BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DIST_DIR="$ROOT_DIR/dist"
+DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist}"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
@@ -20,8 +23,16 @@ cd "$ROOT_DIR"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
-swift build
-BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+if [[ "$BUILD_CONFIGURATION" == "release" ]]; then
+  swift build -c release
+  BUILD_BINARY="$(swift build --show-bin-path -c release)/$APP_NAME"
+elif [[ "$BUILD_CONFIGURATION" != "debug" ]]; then
+  echo "BUILD_CONFIGURATION must be debug or release" >&2
+  exit 2
+else
+  swift build
+  BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
+fi
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS"
@@ -44,6 +55,10 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$APP_NAME</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$APP_VERSION</string>
+  <key>CFBundleVersion</key>
+  <string>$APP_BUILD</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundlePackageType</key>
@@ -61,6 +76,8 @@ open_app() {
 }
 
 case "$MODE" in
+  --bundle-only|bundle-only)
+    ;;
   run)
     open_app
     ;;
@@ -82,7 +99,7 @@ case "$MODE" in
     pkill -x "$APP_NAME" >/dev/null 2>&1 || true
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--bundle-only|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

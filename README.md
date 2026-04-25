@@ -24,11 +24,11 @@ This repository currently contains the early native app slice. It can build, lau
 - Monochrome macOS app icon generated from the `RL` mark.
 - Sample workspace fixture at `Fixtures/SampleWorkspace.workspace`.
 - Swift tests for model and persistence behavior.
-- Local build/run script for Codex and terminal workflows.
+- Local build/run and release archive scripts for Codex and terminal workflows.
 
 ## Planned Follow-Up Slices
 
-- Release packaging.
+- Phase 2 workspace sharing.
 
 ## Requirements
 
@@ -46,11 +46,14 @@ rtk swift build
 rtk swift script/generate_app_icon.swift
 rtk ./script/build_and_run.sh
 rtk ./script/build_and_run.sh --verify
+rtk ./script/package_release.sh
 ```
 
 `script/build_and_run.sh` builds the Swift package, stages a local `.app` bundle under `dist/`, and launches it. The `--verify` mode launches the staged app, checks that the `RequestLab` process is running, and closes it.
 
 `script/generate_app_icon.swift` regenerates `Resources/AppIcon.icns` from a deterministic black-and-beige geometric `RL` mark.
+
+`script/package_release.sh` builds a release `.app`, signs it, creates a zipped macOS archive, and writes a SHA-256 checksum. See `docs/RELEASE.md` for release metadata and Developer ID signing notes.
 
 ## Workspace Format
 
