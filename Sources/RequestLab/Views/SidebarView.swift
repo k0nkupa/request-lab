@@ -10,16 +10,16 @@ struct SidebarView: View {
                 ForEach(store.workspace.collections) { collection in
                     DisclosureGroup {
                         ForEach(collection.environments) { environment in
+                            let rowSelection = CenterPaneSelection.collectionEnvironment(
+                                collectionID: collection.id,
+                                environmentID: environment.id
+                            )
+
                             environmentLabel(
                                 environment,
-                                isActive: environment.id == store.selectedCollectionEnvironment?.id
+                                isSelected: rowSelection == store.selectedCenterPane
                             )
-                                .tag(
-                                    CenterPaneSelection.collectionEnvironment(
-                                        collectionID: collection.id,
-                                        environmentID: environment.id
-                                    )
-                                )
+                                .tag(rowSelection)
                                 .contextMenu {
                                     Button("Use Environment") {
                                         store.selectCenterPane(
@@ -37,8 +37,10 @@ struct SidebarView: View {
                         }
 
                         ForEach(collection.requests) { request in
-                            requestLabel(request)
-                                .tag(CenterPaneSelection.request(request.id))
+                            let rowSelection = CenterPaneSelection.request(request.id)
+
+                            requestLabel(request, isSelected: rowSelection == store.selectedCenterPane)
+                                .tag(rowSelection)
                                 .contextMenu {
                                     Button("Delete Request", role: .destructive) {
                                         store.deleteRequest(id: request.id)
@@ -66,8 +68,10 @@ struct SidebarView: View {
 
             Section("Global Environments") {
                 ForEach(store.workspace.environments) { environment in
-                    environmentLabel(environment, isActive: environment.id == store.selectedGlobalEnvironmentID)
-                        .tag(CenterPaneSelection.globalEnvironment(environment.id))
+                    let rowSelection = CenterPaneSelection.globalEnvironment(environment.id)
+
+                    environmentLabel(environment, isSelected: rowSelection == store.selectedCenterPane)
+                        .tag(rowSelection)
                         .contextMenu {
                             Button("Use Environment") {
                                 store.selectCenterPane(.globalEnvironment(environment.id))
@@ -99,22 +103,36 @@ struct SidebarView: View {
     }
 
     private func collectionLabel(_ collection: APICollection) -> some View {
-        Label(collection.name, systemImage: "folder")
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(RequestLabTheme.collection)
+        Label {
+            Text(collection.name)
+        } icon: {
+            Image(systemName: "folder")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(RequestLabTheme.collection)
+        }
     }
 
-    private func requestLabel(_ request: APIRequest) -> some View {
-        Label(request.name, systemImage: request.kind == .graphQL ? "curlybraces" : "doc.text")
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(request.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
+    private func requestLabel(_ request: APIRequest, isSelected: Bool) -> some View {
+        Label {
+            Text(request.name)
+                .fontWeight(isSelected ? .semibold : .regular)
+        } icon: {
+            Image(systemName: request.kind == .graphQL ? "curlybraces" : "doc.text")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(request.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
+        }
     }
 
-    private func environmentLabel(_ environment: APIEnvironment, isActive: Bool) -> some View {
-        Label(environment.name, systemImage: "server.rack")
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(isActive ? RequestLabTheme.environment : .secondary)
-            .fontWeight(isActive ? .semibold : .regular)
+    private func environmentLabel(_ environment: APIEnvironment, isSelected: Bool) -> some View {
+        Label {
+            Text(environment.name)
+                .foregroundStyle(isSelected ? .primary : .secondary)
+                .fontWeight(isSelected ? .semibold : .regular)
+        } icon: {
+            Image(systemName: "server.rack")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(isSelected ? RequestLabTheme.environment : .secondary)
+        }
     }
 
     private var selection: Binding<CenterPaneSelection?> {
