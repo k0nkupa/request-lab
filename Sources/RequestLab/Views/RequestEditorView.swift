@@ -13,6 +13,16 @@ struct RequestEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            HStack {
+                Text(store.editorTitle)
+                    .font(.title.bold())
+                    .lineLimit(1)
+
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top)
+
             requestBar
                 .padding()
 
@@ -70,11 +80,13 @@ struct RequestEditorView: View {
         HStack(spacing: 8) {
             Picker("Type", selection: requestKindBinding) {
                 ForEach(APIRequestKind.allCases, id: \.self) { kind in
-                    Text(kind == .graphQL ? "GraphQL" : "REST").tag(kind)
+                    Label(kind.displayName, systemImage: kind.systemImage)
+                        .tag(kind)
                 }
             }
             .labelsHidden()
-            .frame(width: 115)
+            .labelStyle(.titleAndIcon)
+            .frame(width: 145)
 
             Picker("Method", selection: requestMethodBinding) {
                 ForEach(HTTPMethod.allCases, id: \.self) { method in
@@ -622,6 +634,26 @@ private extension APIAuthType {
             "Basic"
         case .apiKey:
             "API Key"
+        }
+    }
+}
+
+private extension APIRequestKind {
+    var displayName: String {
+        switch self {
+        case .rest:
+            "REST"
+        case .graphQL:
+            "GraphQL"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .rest:
+            "arrow.left.arrow.right"
+        case .graphQL:
+            "curlybraces"
         }
     }
 }

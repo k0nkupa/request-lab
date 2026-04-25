@@ -33,6 +33,64 @@ struct WorkspaceFileStoreTests {
         #expect(FileManager.default.fileExists(atPath: tempURL.appending(path: ".client/history.yaml").path))
     }
 
+    @Test("collection environments save and load inline with collections")
+    func collectionEnvironmentsRoundTrip() throws {
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let store = WorkspaceFileStore(fileManager: .default)
+        let workspace = APIWorkspace(
+            id: "wrk_collection_env",
+            name: "Collection Environment Workspace",
+            collections: [
+                APICollection(
+                    id: "col_orders",
+                    name: "Orders",
+                    environments: [
+                        APIEnvironment(
+                            id: "env_orders_dev",
+                            name: "Orders Dev",
+                            variables: [
+                                APIVariable(name: "baseUrl", value: "https://orders.example.test")
+                            ]
+                        )
+                    ],
+                    requests: [
+                        APIRequest(
+                            id: "req_orders",
+                            name: "Orders",
+                            method: .get,
+                            url: "{{baseUrl}}/orders"
+                        )
+                    ]
+                )
+            ]
+        )
+
+        try store.save(workspace, to: tempURL)
+        let loaded = try store.load(from: tempURL)
+        let collectionYAML = try String(
+            contentsOf: tempURL.appending(path: "collections/orders.yaml"),
+            encoding: .utf8
+        )
+
+        #expect(loaded == workspace)
+        #expect(collectionYAML.contains("env_orders_dev"))
+    }
+
+    @Test("legacy collection YAML decodes without environments")
+    func legacyCollectionYAMLDecodesWithoutEnvironments() throws {
+        let data = try #require(
+            #"{"id":"col_legacy","name":"Legacy","requests":[]}"#
+                .data(using: .utf8)
+        )
+
+        let collection = try JSONDecoder().decode(APICollection.self, from: data)
+
+        #expect(collection.id == "col_legacy")
+        #expect(collection.environments.isEmpty)
+    }
+
     @Test("secret environment values are redacted from shared YAML")
     func secretEnvironmentValuesAreRedactedFromSharedYAML() throws {
         let tempURL = temporaryWorkspaceURL()

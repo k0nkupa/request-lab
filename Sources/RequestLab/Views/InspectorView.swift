@@ -8,8 +8,12 @@ struct InspectorView: View {
         store.selectedRequest
     }
 
-    private var environment: APIEnvironment? {
-        store.selectedEnvironment
+    private var globalEnvironment: APIEnvironment? {
+        store.selectedGlobalEnvironment
+    }
+
+    private var collectionEnvironment: APIEnvironment? {
+        store.selectedCollectionEnvironment
     }
 
     private var response: APIExecutionResult? {
@@ -25,7 +29,9 @@ struct InspectorView: View {
             VStack(alignment: .leading, spacing: 20) {
                 requestSection
                 Divider()
-                environmentSection
+                globalEnvironmentSection
+                Divider()
+                collectionEnvironmentSection
                 Divider()
                 responseSection
             }
@@ -51,37 +57,28 @@ struct InspectorView: View {
         }
     }
 
-    private var environmentSection: some View {
+    private var globalEnvironmentSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Environment")
+            Text("Global Environment")
                 .font(.headline)
 
-            if let environment {
-                LabeledContent("Name", value: environment.name)
-
-                ForEach(environment.variables) { variable in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label(variable.name, systemImage: variable.isSecret ? "key" : "textformat")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        if variable.isSecret {
-                            SecureField(
-                                "Stored in Keychain",
-                                text: secretBinding(environmentID: environment.id, variableID: variable.id)
-                            )
-                            .textFieldStyle(.roundedBorder)
-                        } else {
-                            TextField(
-                                "Value",
-                                text: variableBinding(environmentID: environment.id, variableID: variable.id)
-                            )
-                            .textFieldStyle(.roundedBorder)
-                        }
-                    }
-                }
+            if let globalEnvironment {
+                environmentFields(globalEnvironment)
             } else {
-                ContentUnavailableView("No environment selected", systemImage: "server.rack")
+                ContentUnavailableView("No global environment selected", systemImage: "server.rack")
+            }
+        }
+    }
+
+    private var collectionEnvironmentSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Collection Environment")
+                .font(.headline)
+
+            if let collectionEnvironment {
+                environmentFields(collectionEnvironment)
+            } else {
+                ContentUnavailableView("No collection environment selected", systemImage: "server.rack")
             }
         }
     }
@@ -109,7 +106,7 @@ struct InspectorView: View {
     private func variableBinding(environmentID: String, variableID: String) -> Binding<String> {
         Binding(
             get: {
-                environment?.variables.first { $0.id == variableID }?.value ?? ""
+                store.variableValue(environmentID: environmentID, variableID: variableID)
             },
             set: { value in
                 store.updateEnvironmentVariable(
@@ -130,5 +127,33 @@ struct InspectorView: View {
                 store.writeSecretValue(environmentID: environmentID, variableID: variableID, value: value)
             }
         )
+    }
+
+    private func environmentFields(_ environment: APIEnvironment) -> some View {
+        Group {
+            LabeledContent("Name", value: environment.name)
+
+            ForEach(environment.variables) { variable in
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(variable.name, systemImage: variable.isSecret ? "key" : "textformat")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if variable.isSecret {
+                        SecureField(
+                            "Stored in Keychain",
+                            text: secretBinding(environmentID: environment.id, variableID: variable.id)
+                        )
+                        .textFieldStyle(.roundedBorder)
+                    } else {
+                        TextField(
+                            "Value",
+                            text: variableBinding(environmentID: environment.id, variableID: variable.id)
+                        )
+                        .textFieldStyle(.roundedBorder)
+                    }
+                }
+            }
+        }
     }
 }

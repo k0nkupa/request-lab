@@ -100,14 +100,7 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Picker("Environment", selection: $store.selectedEnvironmentID) {
-                        ForEach(store.workspace.environments) { environment in
-                            Text(environment.name)
-                                .tag(Optional(environment.id))
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .frame(minWidth: 180)
+                    environmentMenu
                 }
             }
 
@@ -136,6 +129,42 @@ struct ContentView: View {
         } message: {
             Text(store.workspaceErrorMessage ?? "")
         }
+    }
+
+    private var environmentMenu: some View {
+        Menu {
+            Section("Global Environments") {
+                Button("None") {
+                    store.selectGlobalEnvironment(id: nil)
+                }
+
+                ForEach(store.workspace.environments) { environment in
+                    Button(environment.name) {
+                        store.selectGlobalEnvironment(id: environment.id)
+                    }
+                }
+            }
+
+            Section("Collection Environments") {
+                if let collection = store.selectedCollection {
+                    Button("None") {
+                        store.selectCollectionEnvironment(id: nil, for: collection.id)
+                    }
+
+                    ForEach(collection.environments) { environment in
+                        Button(environment.name) {
+                            store.selectCollectionEnvironment(id: environment.id, for: collection.id)
+                        }
+                    }
+                } else {
+                    Text("Select a request")
+                }
+            }
+        } label: {
+            Label(store.environmentPairTitle, systemImage: "server.rack")
+        }
+        .frame(minWidth: 180)
+        .help("Select global and collection environments")
     }
 
     private func openWorkspacePanel() {

@@ -25,12 +25,30 @@ public struct APIWorkspace: Codable, Equatable, Sendable, Identifiable {
 public struct APICollection: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var name: String
+    public var environments: [APIEnvironment]
     public var requests: [APIRequest]
 
-    public init(id: String, name: String, requests: [APIRequest] = []) {
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case environments
+        case requests
+    }
+
+    public init(id: String, name: String, environments: [APIEnvironment] = [], requests: [APIRequest] = []) {
         self.id = id
         self.name = name
+        self.environments = environments
         self.requests = requests
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.environments = try container.decodeIfPresent([APIEnvironment].self, forKey: .environments) ?? []
+        self.requests = try container.decodeIfPresent([APIRequest].self, forKey: .requests) ?? []
     }
 }
 
@@ -235,6 +253,38 @@ public struct APIEnvironment: Codable, Equatable, Sendable, Identifiable {
         self.id = id
         self.name = name
         self.variables = variables
+    }
+
+    public static func merged(global: APIEnvironment?, collection: APIEnvironment?) -> APIEnvironment? {
+        guard global != nil || collection != nil else {
+            return nil
+        }
+
+        var variables: [APIVariable] = []
+        var indexesByName: [String: Int] = [:]
+
+        for variable in global?.variables ?? [] {
+            indexesByName[variable.name] = variables.count
+            variables.append(variable)
+        }
+
+        for variable in collection?.variables ?? [] {
+            if let index = indexesByName[variable.name] {
+                variables[index] = variable
+            } else {
+                indexesByName[variable.name] = variables.count
+                variables.append(variable)
+            }
+        }
+
+        let id = [global?.id, collection?.id]
+            .compactMap(\.self)
+            .joined(separator: "+")
+        let name = [global?.name, collection?.name]
+            .compactMap(\.self)
+            .joined(separator: " + ")
+
+        return APIEnvironment(id: id, name: name, variables: variables)
     }
 }
 

@@ -15,10 +15,11 @@ This repository currently contains the early native app slice. It can build, lau
 - Request editing for type, method, URL, params, headers, auth, body, and GraphQL fields.
 - Open, Save, and Save As for local `.workspace` folders.
 - Postman Collection v2.1 and environment JSON import.
-- Create and delete actions for requests, collections, and environments.
+- Create and delete actions for requests, collections, global environments, and collection environments.
 - Request validation and JSON formatting helpers.
 - Response body and header tabs.
 - Keyboard shortcuts for common actions.
+- Global and collection-scoped environments with collection variables overriding globals on send.
 - Keychain-backed values for secret environment variables.
 - Response status, duration, headers, body, and local history capture.
 - Monochrome macOS app icon generated from the `RL` mark.
@@ -80,6 +81,8 @@ Example.workspace/
 
 Secret environment variables are intentionally written to shared YAML without values. The app stores their runtime values in macOS Keychain using the workspace, environment, and variable identifiers as the lookup key.
 
+Collections can also carry their own inline `environments` list. When a request runs, RequestLab resolves variables from the selected global environment first and then overlays the selected collection environment. If both define the same variable name, the collection environment wins.
+
 ## Tests
 
 The current Swift test suite covers:
@@ -90,9 +93,10 @@ The current Swift test suite covers:
 - Stale YAML cleanup on repeated saves.
 - Duplicate generated filename rejection.
 - Collection and environment order preservation.
+- Collection-scoped environment persistence and legacy collection compatibility.
 - Variable identity behavior.
 - Request body encoding and decoding.
-- Variable resolution.
+- Variable resolution and global/collection environment override behavior.
 - Mocked REST request execution.
 - Mocked GraphQL request execution.
 - Nested workspace editing helpers.

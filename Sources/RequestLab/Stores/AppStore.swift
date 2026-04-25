@@ -8,7 +8,9 @@ final class AppStore {
     var workspace: APIWorkspace
     var workspaceURL: URL?
     var selectedRequestID: String?
-    var selectedEnvironmentID: String?
+    var selectedGlobalEnvironmentID: String?
+    var selectedCollectionEnvironmentIDByCollectionID: [String: String] = [:]
+    var collectionsWithNoEnvironmentSelection: Set<String> = []
     var isInspectorVisible = true
     var isSending = false
     var latestResponse: APIExecutionResult?
@@ -43,7 +45,7 @@ final class AppStore {
         self.postmanImportService = postmanImportService
         self.requestValidationService = requestValidationService
         self.selectedRequestID = workspace.collections.first?.requests.first?.id
-        self.selectedEnvironmentID = workspace.environments.first?.id
+        self.selectedGlobalEnvironmentID = workspace.environments.first?.id
     }
 
     var selectedRequest: APIRequest? {
@@ -52,8 +54,53 @@ final class AppStore {
             .first { $0.id == selectedRequestID }
     }
 
-    var selectedEnvironment: APIEnvironment? {
-        workspace.environments.first { $0.id == selectedEnvironmentID }
+    var selectedCollection: APICollection? {
+        workspace.collection(containingRequestID: selectedRequestID)
+    }
+
+    var selectedGlobalEnvironment: APIEnvironment? {
+        workspace.environments.first { $0.id == selectedGlobalEnvironmentID }
+    }
+
+    var selectedCollectionEnvironment: APIEnvironment? {
+        guard let collection = selectedCollection,
+              !collectionsWithNoEnvironmentSelection.contains(collection.id)
+        else {
+            return nil
+        }
+
+        if let selectedEnvironmentID = selectedCollectionEnvironmentIDByCollectionID[collection.id],
+           let environment = collection.environments.first(where: { $0.id == selectedEnvironmentID })
+        {
+            return environment
+        }
+
+        return collection.environments.first
+    }
+
+    var editorTitle: String {
+        guard let request = selectedRequest else {
+            return selectedCollection?.name ?? workspace.name
+        }
+
+        guard let collection = selectedCollection else {
+            return request.name
+        }
+
+        return "\(collection.name) - \(request.name)"
+    }
+
+    var environmentPairTitle: String {
+        let names: [String] = [selectedGlobalEnvironment?.name, selectedCollectionEnvironment?.name]
+            .compactMap { name -> String? in
+                guard let name, !name.isEmpty else {
+                    return nil
+                }
+
+                return name
+            }
+
+        return names.isEmpty ? "No environment" : names.joined(separator: " + ")
     }
 
     var workspaceLocationTitle: String {
@@ -65,7 +112,9 @@ final class AppStore {
             workspace = try workspaceFileStore.load(from: url)
             workspaceURL = url
             selectedRequestID = workspace.collections.first?.requests.first?.id
-            selectedEnvironmentID = workspace.environments.first?.id
+            selectedGlobalEnvironmentID = workspace.environments.first?.id
+            selectedCollectionEnvironmentIDByCollectionID = [:]
+            collectionsWithNoEnvironmentSelection = []
             latestResponse = nil
             executionErrorMessage = nil
             workspaceErrorMessage = nil
@@ -93,7 +142,7 @@ final class AppStore {
             let data = try Data(contentsOf: url)
             let environment = try postmanImportService.importEnvironment(from: data)
             workspace.environments.append(environment)
-            selectedEnvironmentID = environment.id
+            selectedGlobalEnvironmentID = environment.id
             workspaceErrorMessage = nil
             latestResponse = nil
             executionErrorMessage = nil
@@ -125,6 +174,8 @@ final class AppStore {
         if let selectedRequestID, deletedRequestIDs.contains(selectedRequestID) {
             self.selectedRequestID = workspace.collections.first?.requests.first?.id
         }
+        selectedCollectionEnvironmentIDByCollectionID.removeValue(forKey: collectionID)
+        collectionsWithNoEnvironmentSelection.remove(collectionID)
 
         clearExecutionState()
     }
@@ -192,7 +243,29 @@ final class AppStore {
         )
 
         workspace.addEnvironment(environment)
-        selectedEnvironmentID = environment.id
+        selectedGlobalEnvironmentID = environment.id
+        clearExecutionState()
+    }
+
+    func createCollectionEnvironment(in collectionID: String) {
+        let existingNames = workspace.collections
+            .first { $0.id == collectionID }?
+            .environments
+            .map(\.name) ?? []
+        let environment = APIEnvironment(
+            id: "env_\(UUID().uuidString)",
+            name: nextName(base: "New Environment", existingNames: existingNames),
+            variables: [
+                APIVariable(name: "baseUrl", value: "http://localhost:3000")
+            ]
+        )
+
+        guard workspace.addCollectionEnvironment(environment, toCollectionID: collectionID) else {
+            return
+        }
+
+        selectedCollectionEnvironmentIDByCollectionID[collectionID] = environment.id
+        collectionsWithNoEnvironmentSelection.remove(collectionID)
         clearExecutionState()
     }
 
@@ -201,8 +274,37 @@ final class AppStore {
             return
         }
 
-        if selectedEnvironmentID == environmentID {
-            selectedEnvironmentID = workspace.environments.first?.id
+        if selectedGlobalEnvironmentID == environmentID {
+            selectedGlobalEnvironmentID = workspace.environments.first?.id
+        }
+
+        clearExecutionState()
+    }
+
+    func deleteCollectionEnvironment(id environmentID: String, fromCollectionID collectionID: String) {
+        guard workspace.deleteCollectionEnvironment(id: environmentID, fromCollectionID: collectionID) else {
+            return
+        }
+
+        if selectedCollectionEnvironmentIDByCollectionID[collectionID] == environmentID {
+            selectedCollectionEnvironmentIDByCollectionID.removeValue(forKey: collectionID)
+        }
+
+        clearExecutionState()
+    }
+
+    func selectGlobalEnvironment(id environmentID: String?) {
+        selectedGlobalEnvironmentID = environmentID
+        clearExecutionState()
+    }
+
+    func selectCollectionEnvironment(id environmentID: String?, for collectionID: String) {
+        if let environmentID {
+            selectedCollectionEnvironmentIDByCollectionID[collectionID] = environmentID
+            collectionsWithNoEnvironmentSelection.remove(collectionID)
+        } else {
+            selectedCollectionEnvironmentIDByCollectionID.removeValue(forKey: collectionID)
+            collectionsWithNoEnvironmentSelection.insert(collectionID)
         }
 
         clearExecutionState()
@@ -237,14 +339,32 @@ final class AppStore {
     }
 
     func updateEnvironmentVariable(environmentID: String, variableID: String, value: String?) {
-        guard let environmentIndex = workspace.environments.firstIndex(where: { $0.id == environmentID }),
-              let variableIndex = workspace.environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
-        else {
+        if let environmentIndex = workspace.environments.firstIndex(where: { $0.id == environmentID }),
+           let variableIndex = workspace.environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
+        {
+            workspace.environments[environmentIndex].variables[variableIndex].value = value
+            clearExecutionState()
             return
         }
 
-        workspace.environments[environmentIndex].variables[variableIndex].value = value
-        clearExecutionState()
+        for collectionIndex in workspace.collections.indices {
+            guard let environmentIndex = workspace.collections[collectionIndex].environments.firstIndex(where: { $0.id == environmentID }),
+                  let variableIndex = workspace.collections[collectionIndex].environments[environmentIndex].variables.firstIndex(where: { $0.id == variableID })
+            else {
+                continue
+            }
+
+            workspace.collections[collectionIndex].environments[environmentIndex].variables[variableIndex].value = value
+            clearExecutionState()
+            return
+        }
+    }
+
+    func variableValue(environmentID: String, variableID: String) -> String {
+        environment(id: environmentID)?
+            .variables
+            .first { $0.id == variableID }?
+            .value ?? ""
     }
 
     func readSecretValue(environmentID: String, variableID: String) -> String {
@@ -292,7 +412,7 @@ final class AppStore {
             try requestValidationService.validateForSend(request)
             let result = try await executionService.execute(
                 request,
-                environment: selectedEnvironmentWithSecrets()
+                environment: effectiveEnvironmentWithSecrets()
             )
             latestResponse = result
             appendHistoryEntry(from: result)
@@ -304,12 +424,19 @@ final class AppStore {
         isSending = false
     }
 
-    private func selectedEnvironmentWithSecrets() -> APIEnvironment? {
-        guard var environment = selectedEnvironment else {
+    private func effectiveEnvironmentWithSecrets() -> APIEnvironment? {
+        let globalEnvironment = environmentWithSecrets(selectedGlobalEnvironment)
+        let collectionEnvironment = environmentWithSecrets(selectedCollectionEnvironment)
+
+        return APIEnvironment.merged(global: globalEnvironment, collection: collectionEnvironment)
+    }
+
+    private func environmentWithSecrets(_ environment: APIEnvironment?) -> APIEnvironment? {
+        guard var resolvedEnvironment = environment else {
             return nil
         }
 
-        environment.variables = environment.variables.map { variable in
+        resolvedEnvironment.variables = resolvedEnvironment.variables.map { variable in
             guard variable.isSecret else {
                 return variable
             }
@@ -317,13 +444,23 @@ final class AppStore {
             var resolvedVariable = variable
             resolvedVariable.value = try? keychainSecretStore.readSecret(
                 workspaceID: workspace.id,
-                environmentID: environment.id,
+                environmentID: resolvedEnvironment.id,
                 variableID: variable.id
             )
             return resolvedVariable
         }
 
-        return environment
+        return resolvedEnvironment
+    }
+
+    private func environment(id environmentID: String) -> APIEnvironment? {
+        if let globalEnvironment = workspace.environments.first(where: { $0.id == environmentID }) {
+            return globalEnvironment
+        }
+
+        return workspace.collections
+            .flatMap(\.environments)
+            .first { $0.id == environmentID }
     }
 
     private func appendHistoryEntry(from result: APIExecutionResult) {
@@ -397,6 +534,20 @@ extension APIWorkspace {
                 APICollection(
                     id: "col_starter",
                     name: "Starter Collection",
+                    environments: [
+                        APIEnvironment(
+                            id: "env_starter_local",
+                            name: "Starter Local",
+                            variables: [
+                                APIVariable(
+                                    id: "var_starter_baseUrl",
+                                    name: "baseUrl",
+                                    value: "http://localhost:3000",
+                                    isSecret: false
+                                )
+                            ]
+                        )
+                    ],
                     requests: [
                         APIRequest(
                             id: "req_starter_get",

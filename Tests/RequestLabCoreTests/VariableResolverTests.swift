@@ -63,6 +63,32 @@ struct VariableResolverTests {
         }
     }
 
+    @Test("collection variables override global variables")
+    func collectionVariablesOverrideGlobalVariables() throws {
+        let globalEnvironment = APIEnvironment(
+            id: "env_global",
+            name: "Global",
+            variables: [
+                APIVariable(name: "baseUrl", value: "https://global.example.test"),
+                APIVariable(name: "apiToken", value: "global-token", isSecret: true)
+            ]
+        )
+        let collectionEnvironment = APIEnvironment(
+            id: "env_collection",
+            name: "Collection",
+            variables: [
+                APIVariable(name: "baseUrl", value: "https://collection.example.test"),
+                APIVariable(name: "tenantId", value: "tenant-123")
+            ]
+        )
+
+        let merged = try #require(APIEnvironment.merged(global: globalEnvironment, collection: collectionEnvironment))
+
+        #expect(merged.variables.first { $0.name == "baseUrl" }?.value == "https://collection.example.test")
+        #expect(merged.variables.first { $0.name == "apiToken" }?.value == "global-token")
+        #expect(merged.variables.first { $0.name == "tenantId" }?.value == "tenant-123")
+    }
+
     @Test("resolves basic auth and form body")
     func resolvesBasicAuthAndFormBody() throws {
         let request = APIRequest(

@@ -55,6 +55,36 @@ public extension APIWorkspace {
         }?.id
     }
 
+    func collection(containingRequestID requestID: String?) -> APICollection? {
+        guard let requestID else {
+            return nil
+        }
+
+        return collections.first { collection in
+            collection.requests.contains { $0.id == requestID }
+        }
+    }
+
+    mutating func addCollectionEnvironment(_ environment: APIEnvironment, toCollectionID collectionID: String) -> Bool {
+        guard let collectionIndex = collections.firstIndex(where: { $0.id == collectionID }) else {
+            return false
+        }
+
+        collections[collectionIndex].environments.append(environment)
+        return true
+    }
+
+    mutating func deleteCollectionEnvironment(id environmentID: String, fromCollectionID collectionID: String) -> Bool {
+        guard let collectionIndex = collections.firstIndex(where: { $0.id == collectionID }),
+              let environmentIndex = collections[collectionIndex].environments.firstIndex(where: { $0.id == environmentID })
+        else {
+            return false
+        }
+
+        collections[collectionIndex].environments.remove(at: environmentIndex)
+        return true
+    }
+
     mutating func addEnvironment(_ environment: APIEnvironment) {
         environments.append(environment)
     }

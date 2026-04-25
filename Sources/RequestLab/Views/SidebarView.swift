@@ -9,6 +9,25 @@ struct SidebarView: View {
             Section("Collections") {
                 ForEach(store.workspace.collections) { collection in
                     DisclosureGroup {
+                        ForEach(collection.environments) { environment in
+                            Label(environment.name, systemImage: "server.rack")
+                                .foregroundStyle(
+                                    environment.id == store.selectedCollectionEnvironment?.id ? .primary : .secondary
+                                )
+                                .contextMenu {
+                                    Button("Use Environment") {
+                                        store.selectCollectionEnvironment(id: environment.id, for: collection.id)
+                                    }
+
+                                    Button("Delete Environment", role: .destructive) {
+                                        store.deleteCollectionEnvironment(id: environment.id, fromCollectionID: collection.id)
+                                    }
+                                }
+                                .onTapGesture {
+                                    store.selectCollectionEnvironment(id: environment.id, for: collection.id)
+                                }
+                        }
+
                         ForEach(collection.requests) { request in
                             Label(request.name, systemImage: request.kind == .graphQL ? "curlybraces" : "doc.text")
                                 .tag(Optional(request.id))
@@ -26,6 +45,10 @@ struct SidebarView: View {
                             store.createRequest(in: collection.id)
                         }
 
+                        Button("New Collection Environment") {
+                            store.createCollectionEnvironment(in: collection.id)
+                        }
+
                         Button("Delete Collection", role: .destructive) {
                             store.deleteCollection(id: collection.id)
                         }
@@ -33,15 +56,15 @@ struct SidebarView: View {
                 }
             }
 
-            Section("Environments") {
+            Section("Global Environments") {
                 ForEach(store.workspace.environments) { environment in
                     Label(environment.name, systemImage: "server.rack")
                         .foregroundStyle(
-                            environment.id == store.selectedEnvironmentID ? .primary : .secondary
+                            environment.id == store.selectedGlobalEnvironmentID ? .primary : .secondary
                         )
                         .contextMenu {
                             Button("Use Environment") {
-                                store.selectedEnvironmentID = environment.id
+                                store.selectGlobalEnvironment(id: environment.id)
                             }
 
                             Button("Delete Environment", role: .destructive) {
@@ -49,7 +72,7 @@ struct SidebarView: View {
                             }
                         }
                         .onTapGesture {
-                            store.selectedEnvironmentID = environment.id
+                            store.selectGlobalEnvironment(id: environment.id)
                         }
                 }
             }
@@ -69,6 +92,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle(store.workspace.name)
+        .navigationTitle(store.editorTitle)
     }
 }

@@ -82,6 +82,24 @@ struct WorkspaceEditingTests {
         #expect(workspace.environments.isEmpty)
     }
 
+    @Test("adds and deletes collection environments")
+    func addsAndDeletesCollectionEnvironments() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [APICollection(id: "col", name: "Collection")]
+        )
+        let environment = APIEnvironment(id: "env_collection", name: "Collection Dev")
+
+        let didAdd = workspace.addCollectionEnvironment(environment, toCollectionID: "col")
+        #expect(didAdd)
+        #expect(workspace.collections.first?.environments == [environment])
+
+        let didDelete = workspace.deleteCollectionEnvironment(id: "env_collection", fromCollectionID: "col")
+        #expect(didDelete)
+        #expect(workspace.collections.first?.environments.isEmpty == true)
+    }
+
     @Test("returns false when request id is missing")
     func missingRequestReturnsFalse() {
         var workspace = APIWorkspace(id: "wrk_empty", name: "Empty")
