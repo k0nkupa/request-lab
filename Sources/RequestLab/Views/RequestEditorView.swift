@@ -13,7 +13,10 @@ struct RequestEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 10) {
+                Image(systemName: request?.kind == .graphQL ? "curlybraces" : "doc.text")
+                    .foregroundStyle(request?.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
+
                 Text(store.editorTitle)
                     .font(.title.bold())
                     .lineLimit(1)
@@ -25,6 +28,9 @@ struct RequestEditorView: View {
 
             requestBar
                 .padding()
+                .requestLabSurface(tint: request?.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
+                .padding(.horizontal)
+                .padding(.bottom, 12)
 
             Divider()
 
@@ -90,7 +96,8 @@ struct RequestEditorView: View {
 
             Picker("Method", selection: requestMethodBinding) {
                 ForEach(HTTPMethod.allCases, id: \.self) { method in
-                    Text(method.rawValue).tag(method)
+                    methodBadge(method)
+                        .tag(method)
                 }
             }
             .labelsHidden()
@@ -99,11 +106,13 @@ struct RequestEditorView: View {
             TextField("Request URL", text: requestURLBinding)
                 .textFieldStyle(.roundedBorder)
 
-            Button("Send", systemImage: "paperplane") {
+            Button("Send", systemImage: "paperplane.fill") {
                 Task {
                     await store.sendSelectedRequest()
                 }
             }
+            .buttonStyle(.borderedProminent)
+            .tint(RequestLabTheme.primaryAction)
             .disabled(request == nil || store.isSending)
         }
     }
@@ -220,9 +229,10 @@ struct RequestEditorView: View {
                         .font(.system(.body, design: .monospaced))
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 180)
+                        .background(RequestLabTheme.elevatedSurface)
                         .overlay {
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(.separator, lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(RequestLabTheme.editorBorder, lineWidth: 1)
                         }
 
                     if bodyTypeBinding.wrappedValue == .json {
@@ -248,9 +258,7 @@ struct RequestEditorView: View {
                 Spacer()
 
                 if let response = store.latestResponse {
-                    Text("\(response.statusCode) - \(response.durationMilliseconds) ms")
-                        .font(.caption)
-                        .foregroundStyle(response.statusCode < 400 ? .green : .orange)
+                    responseStatusBadge(response)
                 }
             }
 
@@ -294,6 +302,10 @@ struct RequestEditorView: View {
             }
         }
         .padding()
+        .requestLabSurface(
+            tint: store.latestResponse.map { RequestLabTheme.responseColor(statusCode: $0.statusCode) } ?? RequestLabTheme.info,
+            cornerRadius: 12
+        )
         .frame(minHeight: 220)
     }
 
@@ -310,9 +322,10 @@ struct RequestEditorView: View {
                 .font(.system(.body, design: .monospaced))
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 160)
+                .background(RequestLabTheme.elevatedSurface)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(.separator, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(RequestLabTheme.editorBorder, lineWidth: 1)
                 }
 
             Text(placeholder)
@@ -322,6 +335,42 @@ struct RequestEditorView: View {
             Spacer()
         }
         .padding(.vertical)
+    }
+
+    private func methodBadge(_ method: HTTPMethod) -> some View {
+        Text(method.rawValue)
+            .font(.caption.bold())
+            .monospaced()
+            .foregroundStyle(RequestLabTheme.methodColor(method))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(RequestLabTheme.softFill(RequestLabTheme.methodColor(method)))
+            )
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(RequestLabTheme.softStroke(RequestLabTheme.methodColor(method)), lineWidth: 1)
+            }
+    }
+
+    private func responseStatusBadge(_ response: APIExecutionResult) -> some View {
+        let color = RequestLabTheme.responseColor(statusCode: response.statusCode)
+
+        return Text("\(response.statusCode) - \(response.durationMilliseconds) ms")
+            .font(.caption.bold())
+            .monospacedDigit()
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(RequestLabTheme.softFill(color))
+            )
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(RequestLabTheme.softStroke(color), lineWidth: 1)
+            }
     }
 
     private var requestKindBinding: Binding<APIRequestKind> {
