@@ -133,6 +133,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .padding(.leading, 16)
         .navigationTitle(store.editorTitle)
     }
 

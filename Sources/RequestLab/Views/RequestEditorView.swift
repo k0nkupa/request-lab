@@ -16,6 +16,7 @@ struct RequestEditorView: View {
             HStack(spacing: 10) {
                 Image(systemName: request?.kind == .graphQL ? "curlybraces" : "doc.text")
                     .foregroundStyle(request?.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
+                    .help(request?.kind == .graphQL ? "GraphQL request" : "HTTP request")
 
                 Text(store.editorTitle)
                     .font(.title.bold())
