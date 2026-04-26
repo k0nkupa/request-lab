@@ -6,6 +6,7 @@ struct SidebarView: View {
     @State private var renamingCollectionID: String?
     @State private var collectionNameDraft = ""
     @FocusState private var isCollectionNameFieldFocused: Bool
+    @State private var selectedColorCollectionID: String?
 
     var body: some View {
         List(selection: selection) {
@@ -54,10 +55,26 @@ struct SidebarView: View {
                     } label: {
                         collectionLabel(collection)
                             .id(collection.id)
+                            .popover(
+                                isPresented: Binding(
+                                    get: { selectedColorCollectionID == collection.id },
+                                    set: { isPresented in
+                                        if !isPresented, selectedColorCollectionID == collection.id {
+                                            selectedColorCollectionID = nil
+                                        }
+                                    }
+                                )
+                            ) {
+                                collectionColorPicker(for: collection)
+                            }
                     }
                     .contextMenu {
                         Button("Rename Collection") {
                             startRenamingCollection(collection)
+                        }
+
+                        Button("Change Color") {
+                            selectedColorCollectionID = collection.id
                         }
 
                         Divider()
@@ -145,6 +162,69 @@ struct SidebarView: View {
                     .foregroundStyle(RequestLabTheme.collectionColor(collection.color))
             }
         }
+    }
+
+    private func collectionColorPicker(for collection: APICollection) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Collection Color")
+                .font(.headline)
+
+            Button {
+                store.updateCollectionColor(id: collection.id, color: nil)
+                selectedColorCollectionID = nil
+            } label: {
+                colorOptionLabel(
+                    title: "Default",
+                    color: RequestLabTheme.collectionColor(nil),
+                    isSelected: collection.color == nil
+                )
+            }
+            .buttonStyle(.plain)
+
+            Divider()
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 36), spacing: 10)], spacing: 10) {
+                ForEach(APICollectionColor.allCases) { color in
+                    Button {
+                        store.updateCollectionColor(id: collection.id, color: color)
+                        selectedColorCollectionID = nil
+                    } label: {
+                        Circle()
+                            .fill(RequestLabTheme.collectionColor(color))
+                            .frame(width: 24, height: 24)
+                            .overlay {
+                                if collection.color == color {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                            .accessibilityLabel(color.rawValue.capitalized)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 220)
+    }
+
+    private func colorOptionLabel(title: String, color: Color, isSelected: Bool) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(color)
+                .frame(width: 14, height: 14)
+
+            Text(title)
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.caption.bold())
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     private func requestLabel(_ request: APIRequest, isSelected: Bool) -> some View {
