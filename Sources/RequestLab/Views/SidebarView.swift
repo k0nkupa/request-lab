@@ -104,6 +104,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .contentMargins(.leading, 24, for: .scrollContent)
         .navigationTitle(store.editorTitle)
     }
 
