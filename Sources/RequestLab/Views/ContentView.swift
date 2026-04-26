@@ -24,76 +24,46 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup {
-                Button("Open", systemImage: "folder") {
+                ToolbarIconButton("Open workspace", systemImage: "folder") {
                     openWorkspacePanel()
                 }
                 .keyboardShortcut("o", modifiers: .command)
-                .help("Open workspace")
 
-                Menu("New", systemImage: "plus") {
-                    Button("Request") {
-                        store.createRequest()
-                    }
-                    .keyboardShortcut("n", modifiers: .command)
-
-                    Button("GraphQL Request") {
-                        store.createRequest(kind: .graphQL)
-                    }
-
-                    Divider()
-
-                    Button("Collection") {
-                        store.createCollection()
-                    }
-
-                    Button("Environment") {
-                        store.createEnvironment()
-                    }
+                ToolbarIconButton("Create item", systemImage: "plus") {
+                    createItemPopover
                 }
-                .help("Create item")
 
-                Menu("Import", systemImage: "square.and.arrow.down") {
-                    Button("Postman Collection") {
-                        importPostmanCollectionPanel()
-                    }
-
-                    Button("Postman Environment") {
-                        importPostmanEnvironmentPanel()
-                    }
+                ToolbarIconButton("Import Postman JSON", systemImage: "square.and.arrow.down") {
+                    importPopover
                 }
-                .help("Import Postman JSON")
 
-                Button("Send", systemImage: "paperplane") {
+                ToolbarIconButton("Send request", systemImage: "paperplane") {
                     Task {
                         await store.sendSelectedRequest()
                     }
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(store.selectedRequest == nil || store.isSending)
-                .help("Send request")
 
-                Button("Delete", systemImage: "trash", role: .destructive) {
+                ToolbarIconButton("Delete selected request", systemImage: "trash", role: .destructive) {
                     store.deleteSelectedRequest()
                 }
                 .keyboardShortcut(.delete, modifiers: [])
                 .disabled(store.selectedRequest == nil)
-                .help("Delete selected request")
 
-                Button("Save", systemImage: "square.and.arrow.down") {
+                ToolbarIconButton("Save workspace", systemImage: "square.and.arrow.down") {
                     if store.workspaceURL == nil {
                         saveWorkspacePanel()
                     } else {
                         store.saveWorkspace()
                     }
                 }
-                    .keyboardShortcut("s", modifiers: .command)
-                    .help("Save workspace")
+                .keyboardShortcut("s", modifiers: .command)
 
-                Button("Save As", systemImage: "square.and.arrow.down.on.square") {
+                ToolbarIconButton("Save workspace as", systemImage: "square.and.arrow.down.on.square") {
                     saveWorkspacePanel()
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
-                .help("Save workspace as")
             }
 
             ToolbarItem(placement: .principal) {
@@ -107,13 +77,12 @@ struct ContentView: View {
             }
 
             ToolbarItem {
-                Button(
-                    "Inspector",
+                ToolbarIconButton(
+                    store.isInspectorVisible ? "Hide inspector" : "Show inspector",
                     systemImage: store.isInspectorVisible ? "sidebar.trailing" : "sidebar.right"
                 ) {
                     store.isInspectorVisible.toggle()
                 }
-                .help(store.isInspectorVisible ? "Hide inspector" : "Show inspector")
             }
         }
         .alert(
@@ -170,6 +139,47 @@ struct ContentView: View {
         .frame(minWidth: 180)
         .tint(RequestLabTheme.environment)
         .help("Select global and collection environments")
+    }
+
+    private var createItemPopover: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button("Request") {
+                store.createRequest()
+            }
+            .keyboardShortcut("n", modifiers: .command)
+
+            Button("GraphQL Request") {
+                store.createRequest(kind: .graphQL)
+            }
+
+            Divider()
+
+            Button("Collection") {
+                store.createCollection()
+            }
+
+            Button("Environment") {
+                store.createEnvironment()
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(10)
+        .frame(width: 180, alignment: .leading)
+    }
+
+    private var importPopover: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button("Postman Collection") {
+                importPostmanCollectionPanel()
+            }
+
+            Button("Postman Environment") {
+                importPostmanEnvironmentPanel()
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(10)
+        .frame(width: 220, alignment: .leading)
     }
 
     @ViewBuilder
@@ -234,5 +244,113 @@ struct ContentView: View {
         }
 
         onSelect(url)
+    }
+}
+
+private enum ToolbarIconPopover: Identifiable {
+    case tooltip
+    case actions
+
+    var id: String {
+        switch self {
+        case .tooltip:
+            "tooltip"
+        case .actions:
+            "actions"
+        }
+    }
+}
+
+private struct ToolbarIconButton<PopoverContent: View>: View {
+    let title: String
+    let systemImage: String
+    let role: ButtonRole?
+    let action: () -> Void
+    let popoverContent: (() -> PopoverContent)?
+    @State private var activePopover: ToolbarIconPopover?
+    @State private var tooltipWorkItem: DispatchWorkItem?
+
+    init(
+        _ title: String,
+        systemImage: String,
+        role: ButtonRole? = nil,
+        action: @escaping () -> Void
+    ) where PopoverContent == EmptyView {
+        self.title = title
+        self.systemImage = systemImage
+        self.role = role
+        self.action = action
+        popoverContent = nil
+    }
+
+    init(
+        _ title: String,
+        systemImage: String,
+        @ViewBuilder popoverContent: @escaping () -> PopoverContent
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        role = nil
+        action = {}
+        self.popoverContent = popoverContent
+    }
+
+    var body: some View {
+        Button(role: role) {
+            if popoverContent == nil {
+                action()
+            } else {
+                tooltipWorkItem?.cancel()
+                activePopover = .actions
+            }
+        } label: {
+            Label(title, systemImage: systemImage)
+        }
+        .help(title)
+        .accessibilityLabel(Text(title))
+        .onHover { isHovering in
+            if isHovering {
+                scheduleTooltip()
+            } else if activePopover == .tooltip {
+                tooltipWorkItem?.cancel()
+                activePopover = nil
+            } else {
+                tooltipWorkItem?.cancel()
+            }
+        }
+        .popover(item: $activePopover, arrowEdge: .bottom) { popover in
+            switch popover {
+            case .tooltip:
+                ToolbarTooltipBubble(text: title)
+            case .actions:
+                if let popoverContent {
+                    popoverContent()
+                }
+            }
+        }
+    }
+
+    private func scheduleTooltip() {
+        tooltipWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
+            activePopover = .tooltip
+        }
+        tooltipWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: workItem)
+    }
+}
+
+private struct ToolbarTooltipBubble: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
