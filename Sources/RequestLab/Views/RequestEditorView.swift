@@ -154,17 +154,19 @@ struct RequestEditorView: View {
 
             Spacer()
         }
-        .padding(.vertical)
+        .padding(.top, 24)
+        .padding(.bottom)
     }
 
     private var graphQLView: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("GraphQL")
                 .font(.headline)
 
             if request?.kind == .graphQL {
                 TextField("Operation name", text: graphQLOperationNameBinding)
                     .textFieldStyle(.roundedBorder)
+                    .padding(.top, 6)
 
                 GroupBox("Query") {
                     TextEditor(text: graphQLQueryBinding)
@@ -196,7 +198,8 @@ struct RequestEditorView: View {
 
             Spacer()
         }
-        .padding(.vertical)
+        .padding(.top, 24)
+        .padding(.bottom)
     }
 
     private var bodyView: some View {
@@ -249,7 +252,8 @@ struct RequestEditorView: View {
 
             Spacer()
         }
-        .padding(.vertical)
+        .padding(.top, 24)
+        .padding(.bottom)
     }
 
     private var responsePanel: some View {
@@ -337,7 +341,8 @@ struct RequestEditorView: View {
 
             Spacer()
         }
-        .padding(.vertical)
+        .padding(.top, 24)
+        .padding(.bottom)
     }
 
     private func methodBadge(_ method: HTTPMethod) -> some View {
