@@ -9,10 +9,11 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             SidebarView(store: store)
+                .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
         } detail: {
             HSplitView {
                 centerWorkspace
-                    .frame(minWidth: 560)
+                    .frame(minWidth: 620)
                     .background(RequestLabTheme.background)
 
                 if store.isInspectorVisible {
