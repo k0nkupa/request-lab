@@ -26,16 +26,17 @@ The layout should continue to use the existing `NavigationSplitView` and `HSplit
 - Sidebar: minimum `220`, ideal `260`, maximum `320`.
 - Center workspace: minimum `620`.
 - Inspector: keep the current minimum `260`, ideal `300`, maximum `360`.
-- Window minimum width: `1120`.
+- Window minimum width with inspector visible: `1120`.
+- Window minimum width with inspector hidden: `860`.
 
 These values are intended to keep the request editor usable while leaving enough room for the sidebar and inspector. The center pane remains the flexible work area.
 
 ## Implementation Shape
 
-1. Add an explicit width frame to `SidebarView(store:)` inside `ContentView`.
+1. Add an explicit `navigationSplitViewColumnWidth` to `SidebarView(store:)` inside `ContentView`.
 2. Adjust the `centerWorkspace` minimum width to the selected layout budget.
 3. Keep the inspector frame bounded at its current range unless verification shows it needs a small adjustment.
-4. Raise the root `ContentView` frame minimum width in `RequestLabApp`.
+4. Raise the root `ContentView` frame minimum width in `RequestLabApp`, using `1120` when the inspector is visible and `860` when it is hidden.
 
 ## Validation
 

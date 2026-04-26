@@ -4,7 +4,7 @@
 
 **Goal:** Prevent RequestLab's main sidebar from expanding indefinitely and stop the three-pane window layout from being resized below a usable width.
 
-**Architecture:** Keep the existing `NavigationSplitView` plus `HSplitView` layout. Add explicit pane width budgets at the composition boundary in `ContentView`, and raise the root window minimum width in `RequestLabApp` so the layout cannot be compressed into an invalid state.
+**Architecture:** Keep the existing `NavigationSplitView` plus `HSplitView` layout. Add explicit split-view column sizing at the composition boundary in `ContentView`, and set the root window minimum width in `RequestLabApp` from the visible pane budget so the layout cannot be compressed into an invalid state.
 
 **Tech Stack:** Swift 6, SwiftUI, SwiftPM, macOS, `rtk` command wrapper.
 
@@ -23,7 +23,7 @@ Run:
 sed -n '1,40p' Sources/RequestLab/Views/ContentView.swift
 ```
 
-Expected: `SidebarView(store: store)` has no explicit width frame, `centerWorkspace` has `.frame(minWidth: 560)`, and `InspectorView(store: store)` has `.frame(minWidth: 260, idealWidth: 300, maxWidth: 360)`.
+Expected: `SidebarView(store: store)` is the `NavigationSplitView` sidebar content, `centerWorkspace` is the detail content, and `InspectorView(store: store)` is conditionally shown inside the `HSplitView`.
 
 - [ ] **Step 2: Add explicit width bounds to the sidebar and update the center minimum**
 
@@ -33,7 +33,7 @@ Replace the current `NavigationSplitView` body block in `Sources/RequestLab/View
 var body: some View {
     NavigationSplitView {
         SidebarView(store: store)
-            .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
     } detail: {
         HSplitView {
             centerWorkspace
@@ -60,7 +60,7 @@ Run:
 sed -n '1,30p' Sources/RequestLab/Views/ContentView.swift
 ```
 
-Expected: the sidebar has `minWidth: 220, idealWidth: 260, maxWidth: 320`, the center pane has `minWidth: 620`, and the inspector is still bounded at `260...360`.
+Expected: the sidebar has `navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)`, the center pane has `minWidth: 620`, and the inspector is still bounded at `260...360`.
 
 ### Task 2: Raise The Window Minimum Width
 
@@ -75,15 +75,15 @@ Run:
 sed -n '1,25p' Sources/RequestLab/App/RequestLabApp.swift
 ```
 
-Expected: `ContentView(store: store)` uses `.frame(minWidth: 980, minHeight: 640)`.
+Expected: `ContentView(store: store)` is framed at the `WindowGroup` root.
 
-- [ ] **Step 2: Set the window minimum width to the approved budget**
+- [ ] **Step 2: Set the window minimum width to the visible pane budget**
 
 Replace the `ContentView` frame in `Sources/RequestLab/App/RequestLabApp.swift` with this code:
 
 ```swift
 ContentView(store: store)
-    .frame(minWidth: 1120, minHeight: 640)
+    .frame(minWidth: store.isInspectorVisible ? 1120 : 860, minHeight: 640)
     .tint(RequestLabTheme.tint)
 ```
 
@@ -95,7 +95,7 @@ Run:
 sed -n '8,16p' Sources/RequestLab/App/RequestLabApp.swift
 ```
 
-Expected: the root app frame has `minWidth: 1120` and `minHeight: 640`.
+Expected: the root app frame has `minWidth: store.isInspectorVisible ? 1120 : 860` and `minHeight: 640`.
 
 ### Task 3: Build And Verify
 
@@ -145,10 +145,13 @@ With the app open, verify these exact behaviors:
 2. Drag the left sidebar narrower.
    Expected: it stays usable around the 220 point min width.
 
-3. Shrink the main RequestLab window.
+3. Shrink the main RequestLab window with the inspector visible.
    Expected: the window stops at the 1120 x 640 minimum instead of letting panes overlap.
 
-4. At the minimum window size, inspect the request editor, toolbar, and right inspector.
+4. Hide the inspector and shrink the main RequestLab window.
+   Expected: the window can shrink to the 860 x 640 two-pane minimum without pane overlap.
+
+5. At each minimum window size, inspect the request editor, toolbar, and right inspector when visible.
    Expected: text remains readable and primary controls are not stacked on top of each other.
 ```
 
@@ -157,6 +160,7 @@ With the app open, verify these exact behaviors:
 **Files:**
 - Stage: `Sources/RequestLab/Views/ContentView.swift`
 - Stage: `Sources/RequestLab/App/RequestLabApp.swift`
+- Stage: `docs/superpowers/specs/2026-04-26-layout-resizing-design.md`
 - Stage: `docs/superpowers/plans/2026-04-26-layout-resizing.md`
 
 - [ ] **Step 1: Review the final diff**
@@ -164,17 +168,17 @@ With the app open, verify these exact behaviors:
 Run:
 
 ```bash
-git diff -- Sources/RequestLab/Views/ContentView.swift Sources/RequestLab/App/RequestLabApp.swift docs/superpowers/plans/2026-04-26-layout-resizing.md
+git diff -- Sources/RequestLab/Views/ContentView.swift Sources/RequestLab/App/RequestLabApp.swift docs/superpowers/specs/2026-04-26-layout-resizing-design.md docs/superpowers/plans/2026-04-26-layout-resizing.md
 ```
 
-Expected: the diff only contains the pane sizing changes, root window width change, and this plan.
+Expected: the diff only contains the pane sizing changes, root window width behavior, and the updated spec and plan docs.
 
 - [ ] **Step 2: Stage the implementation files**
 
 Run:
 
 ```bash
-git add Sources/RequestLab/Views/ContentView.swift Sources/RequestLab/App/RequestLabApp.swift docs/superpowers/plans/2026-04-26-layout-resizing.md
+git add Sources/RequestLab/Views/ContentView.swift Sources/RequestLab/App/RequestLabApp.swift docs/superpowers/specs/2026-04-26-layout-resizing-design.md docs/superpowers/plans/2026-04-26-layout-resizing.md
 ```
 
 - [ ] **Step 3: Commit the implementation**
@@ -186,4 +190,3 @@ git commit -m "fix: stabilize main window resizing"
 ```
 
 Expected: commit succeeds with only the implementation and plan files included.
-

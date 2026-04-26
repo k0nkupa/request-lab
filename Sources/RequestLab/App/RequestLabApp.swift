@@ -9,7 +9,7 @@ struct RequestLabApp: App {
     var body: some Scene {
         WindowGroup("RequestLab") {
             ContentView(store: store)
-                .frame(minWidth: 1120, minHeight: 640)
+                .frame(minWidth: store.isInspectorVisible ? 1120 : 860, minHeight: 640)
                 .tint(RequestLabTheme.tint)
         }
         .commands {
