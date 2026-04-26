@@ -26,24 +26,36 @@ struct InspectorView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 14) {
                 requestSection
-                Divider()
                 globalEnvironmentSection
-                Divider()
                 collectionEnvironmentSection
-                Divider()
                 responseSection
             }
             .padding()
         }
     }
 
-    private var requestSection: some View {
+    private func inspectorSection<Content: View>(
+        _ title: String,
+        systemImage: String,
+        tint: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Request")
+            Label(title, systemImage: systemImage)
                 .font(.headline)
+                .foregroundStyle(tint)
+                .symbolRenderingMode(.hierarchical)
 
+            content()
+        }
+        .padding(12)
+        .requestLabSurface(tint: tint)
+    }
+
+    private var requestSection: some View {
+        inspectorSection("Request", systemImage: "doc.text", tint: RequestLabTheme.selection) {
             if let request {
                 LabeledContent("Name", value: request.name)
                 LabeledContent("Type", value: request.kind == .graphQL ? "GraphQL" : "REST")
@@ -58,10 +70,7 @@ struct InspectorView: View {
     }
 
     private var globalEnvironmentSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Global Environment")
-                .font(.headline)
-
+        inspectorSection("Global Environment", systemImage: "server.rack", tint: RequestLabTheme.environment) {
             if let globalEnvironment {
                 environmentFields(globalEnvironment)
             } else {
@@ -71,10 +80,7 @@ struct InspectorView: View {
     }
 
     private var collectionEnvironmentSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Collection Environment")
-                .font(.headline)
-
+        inspectorSection("Collection Environment", systemImage: "server.rack", tint: RequestLabTheme.graphQL) {
             if let collectionEnvironment {
                 environmentFields(collectionEnvironment)
             } else {
@@ -84,10 +90,11 @@ struct InspectorView: View {
     }
 
     private var responseSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Last Response")
-                .font(.headline)
-
+        inspectorSection(
+            "Last Response",
+            systemImage: "tray.full",
+            tint: response.map { RequestLabTheme.responseColor(statusCode: $0.statusCode) } ?? RequestLabTheme.info
+        ) {
             if let response {
                 LabeledContent("Status", value: "\(response.statusCode)")
                 LabeledContent("Duration", value: "\(response.durationMilliseconds) ms")
@@ -95,7 +102,7 @@ struct InspectorView: View {
                 LabeledContent("Headers", value: "\(response.headers.count)")
             } else if let errorMessage {
                 Text(errorMessage)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(RequestLabTheme.error)
                     .textSelection(.enabled)
             } else {
                 ContentUnavailableView("No response", systemImage: "tray")

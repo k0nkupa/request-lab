@@ -33,13 +33,22 @@ struct EnvironmentEditorView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(store.selectedEnvironmentEditorTitle)
-                .font(.title.bold())
+        HStack(spacing: 12) {
+            Image(systemName: "server.rack")
+                .font(.title2)
+                .foregroundStyle(RequestLabTheme.environment)
+                .symbolRenderingMode(.hierarchical)
 
-            Text(environment?.name ?? "No environment")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(store.selectedEnvironmentEditorTitle)
+                    .font(.title.bold())
+
+                Text(environment?.name ?? "No environment")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -71,6 +80,8 @@ struct EnvironmentEditorView: View {
                     } label: {
                         Label("Add variable", systemImage: "plus")
                     }
+                    .buttonStyle(.bordered)
+                    .tint(RequestLabTheme.environment)
                 }
 
                 if environment.variables.isEmpty {
@@ -94,8 +105,9 @@ struct EnvironmentEditorView: View {
 
     private func variableRow(environmentID: String, variable: APIVariable) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            Image(systemName: variable.isSecret ? "key.horizontal" : "textformat")
-                .foregroundStyle(.secondary)
+            Image(systemName: variable.isSecret ? "key.horizontal.fill" : "textformat")
+                .foregroundStyle(variable.isSecret ? RequestLabTheme.warning : RequestLabTheme.environment)
+                .symbolRenderingMode(.hierarchical)
                 .frame(width: 18)
 
             TextField(
@@ -127,6 +139,8 @@ struct EnvironmentEditorView: View {
             .buttonStyle(.borderless)
             .help("Delete variable")
         }
+        .padding(10)
+        .requestLabSurface(tint: variable.isSecret ? RequestLabTheme.warning : RequestLabTheme.environment)
     }
 
     private func environmentNameBinding(environmentID: String) -> Binding<String> {
