@@ -33,6 +33,7 @@ struct InspectorView: View {
                 responseSection
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -51,6 +52,7 @@ struct InspectorView: View {
             content()
         }
         .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .requestLabSurface(tint: tint)
     }
 

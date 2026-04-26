@@ -25,6 +25,7 @@ struct RequestEditorView: View {
             }
             .padding(.horizontal)
             .padding(.top)
+            .padding(.bottom, 8)
 
             requestBar
                 .padding()
@@ -75,10 +76,12 @@ struct RequestEditorView: View {
             }
             .padding(.horizontal)
             .padding(.top)
+            .padding(.bottom, 12)
 
             Divider()
 
             responsePanel
+                .padding([.horizontal, .top, .bottom])
         }
     }
 
