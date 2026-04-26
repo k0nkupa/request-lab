@@ -150,7 +150,7 @@ struct SidebarView: View {
                 }
                 .onChange(of: isCollectionNameFieldFocused) { _, isFocused in
                     if !isFocused, renamingCollectionID == collection.id {
-                        commitCollectionRename()
+                        cancelCollectionRename()
                     }
                 }
         } else {

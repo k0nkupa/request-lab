@@ -478,7 +478,7 @@ Replace the existing `collectionLabel(_:)` function with:
                 }
                 .onChange(of: isCollectionNameFieldFocused) { _, isFocused in
                     if !isFocused, renamingCollectionID == collection.id {
-                        commitCollectionRename()
+                        cancelCollectionRename()
                     }
                 }
         } else {
@@ -761,7 +761,7 @@ Manual checks:
 4. Confirm the collection name updates inline.
 5. Right-click the renamed collection.
 6. Choose Rename Collection.
-7. Type three spaces and click outside.
+7. Type three spaces and press Enter.
 8. Confirm the previous name remains.
 9. Right-click the collection and choose Change Color.
 10. Select Purple.

@@ -104,7 +104,7 @@ Inline rename behavior:
 
 - Enter commits the trimmed name.
 - Escape cancels and restores the original name.
-- Losing focus commits if the trimmed name is non-empty.
+- Losing focus cancels and restores the original name.
 - Empty or whitespace-only input cancels instead of saving garbage.
 
 Only one collection can be in rename mode at a time. Starting rename on another
