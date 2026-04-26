@@ -18,6 +18,31 @@ enum RequestLabTheme {
     static let environment = Color.indigo
     static let collection = Color.teal
 
+    static func collectionColor(_ color: APICollectionColor?) -> Color {
+        switch color {
+        case .blue:
+            .blue
+        case .green:
+            .green
+        case .red:
+            .red
+        case .purple:
+            .purple
+        case .orange:
+            .orange
+        case .cyan:
+            .cyan
+        case .indigo:
+            .indigo
+        case .pink:
+            .pink
+        case .gray:
+            .gray
+        case .none:
+            collection
+        }
+    }
+
     static func softFill(_ color: Color) -> Color {
         color.opacity(0.12)
     }
