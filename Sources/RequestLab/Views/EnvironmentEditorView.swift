@@ -38,6 +38,7 @@ struct EnvironmentEditorView: View {
                 .font(.title2)
                 .foregroundStyle(RequestLabTheme.environment)
                 .symbolRenderingMode(.hierarchical)
+                .help("Environment")
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(store.selectedEnvironmentEditorTitle)
