@@ -3,6 +3,9 @@ import SwiftUI
 
 struct SidebarView: View {
     @Bindable var store: AppStore
+    @State private var renamingCollectionID: String?
+    @State private var collectionNameDraft = ""
+    @FocusState private var isCollectionNameFieldFocused: Bool
 
     var body: some View {
         List(selection: selection) {
@@ -50,8 +53,15 @@ struct SidebarView: View {
                         }
                     } label: {
                         collectionLabel(collection)
+                            .id(collection.id)
                     }
                     .contextMenu {
+                        Button("Rename Collection") {
+                            startRenamingCollection(collection)
+                        }
+
+                        Divider()
+
                         Button("New Request") {
                             store.createRequest(in: collection.id)
                         }
@@ -59,6 +69,8 @@ struct SidebarView: View {
                         Button("New Collection Environment") {
                             store.createCollectionEnvironment(in: collection.id)
                         }
+
+                        Divider()
 
                         Button("Delete Collection", role: .destructive) {
                             store.deleteCollection(id: collection.id)
@@ -107,13 +119,31 @@ struct SidebarView: View {
         .navigationTitle(store.editorTitle)
     }
 
+    @ViewBuilder
     private func collectionLabel(_ collection: APICollection) -> some View {
-        Label {
-            Text(collection.name)
-        } icon: {
-            Image(systemName: "folder")
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(RequestLabTheme.collection)
+        if renamingCollectionID == collection.id {
+            TextField("Collection name", text: $collectionNameDraft)
+                .textFieldStyle(.plain)
+                .focused($isCollectionNameFieldFocused)
+                .onSubmit {
+                    commitCollectionRename()
+                }
+                .onExitCommand {
+                    cancelCollectionRename()
+                }
+                .onChange(of: isCollectionNameFieldFocused) { _, isFocused in
+                    if !isFocused, renamingCollectionID == collection.id {
+                        commitCollectionRename()
+                    }
+                }
+        } else {
+            Label {
+                Text(collection.name)
+            } icon: {
+                Image(systemName: "folder")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(RequestLabTheme.collectionColor(collection.color))
+            }
         }
     }
 
@@ -148,6 +178,33 @@ struct SidebarView: View {
                     .accessibilityLabel("Active environment")
             }
         }
+    }
+
+    private func startRenamingCollection(_ collection: APICollection) {
+        renamingCollectionID = collection.id
+        collectionNameDraft = collection.name
+        isCollectionNameFieldFocused = true
+    }
+
+    private func commitCollectionRename() {
+        guard let collectionID = renamingCollectionID else {
+            return
+        }
+
+        let trimmedName = collectionNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            store.renameCollection(id: collectionID, to: trimmedName)
+        }
+
+        renamingCollectionID = nil
+        collectionNameDraft = ""
+        isCollectionNameFieldFocused = false
+    }
+
+    private func cancelCollectionRename() {
+        renamingCollectionID = nil
+        collectionNameDraft = ""
+        isCollectionNameFieldFocused = false
     }
 
     private var selection: Binding<CenterPaneSelection?> {
