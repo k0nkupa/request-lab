@@ -70,6 +70,23 @@ Insert these tests after `addsAndDeletesCollections()`:
         #expect(workspace.collections.first?.name == "Orders")
     }
 
+    @Test("rename collection rejects duplicate save filenames")
+    func renameCollectionRejectsDuplicateSaveFilenames() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(id: "col_foo", name: "Foo Bar"),
+                APICollection(id: "col_orders", name: "Orders"),
+            ]
+        )
+
+        let didRename = workspace.renameCollection(id: "col_orders", to: "Foo/Bar")
+
+        #expect(!didRename)
+        #expect(workspace.collections.map(\.name) == ["Foo Bar", "Orders"])
+    }
+
     @Test("sets and clears collection colors")
     func setsAndClearsCollectionColors() {
         var workspace = APIWorkspace(
@@ -190,9 +207,20 @@ In `Sources/RequestLabCore/Models/WorkspaceEditing.swift`, insert this block aft
             return false
         }
 
-        return updateCollection(id: collectionID) { collection in
-            collection.name = trimmedName
+        guard let collectionIndex = collections.firstIndex(where: { $0.id == collectionID }) else {
+            return false
         }
+
+        let proposedFileName = WorkspaceFileNaming.yamlFileName(for: trimmedName)
+        let hasFileNameCollision = collections.enumerated().contains { index, collection in
+            index != collectionIndex && WorkspaceFileNaming.yamlFileName(for: collection.name) == proposedFileName
+        }
+        guard !hasFileNameCollision else {
+            return false
+        }
+
+        collections[collectionIndex].name = trimmedName
+        return true
     }
 
     mutating func updateCollectionColor(id collectionID: String, color: APICollectionColor?) -> Bool {

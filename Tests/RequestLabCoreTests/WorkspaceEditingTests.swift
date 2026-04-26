@@ -75,6 +75,23 @@ struct WorkspaceEditingTests {
         #expect(workspace.collections.first?.name == "Orders")
     }
 
+    @Test("rename collection rejects duplicate save filenames")
+    func renameCollectionRejectsDuplicateSaveFilenames() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(id: "col_foo", name: "Foo Bar"),
+                APICollection(id: "col_orders", name: "Orders"),
+            ]
+        )
+
+        let didRename = workspace.renameCollection(id: "col_orders", to: "Foo/Bar")
+
+        #expect(!didRename)
+        #expect(workspace.collections.map(\.name) == ["Foo Bar", "Orders"])
+    }
+
     @Test("sets and clears collection colors")
     func setsAndClearsCollectionColors() {
         var workspace = APIWorkspace(

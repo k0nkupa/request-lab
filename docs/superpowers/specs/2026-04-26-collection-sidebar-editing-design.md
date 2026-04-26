@@ -75,9 +75,9 @@ mutating func updateCollectionColor(id collectionID: String, color: APICollectio
 ```
 
 `renameCollection` trims whitespace and rejects empty names by returning `false`.
-It does not enforce unique collection names in this slice because the app already
-allows duplicate display names until save-time filename validation catches duplicate
-collection filenames. Changing that policy here would widen the behavior surface.
+It also rejects names whose normalized workspace YAML filename would collide with
+another collection. This keeps inline rename from creating a workspace that looks
+valid in the sidebar but later fails when saved.
 
 `AppStore` wraps these helpers with UI-facing methods and calls `clearExecutionState()`
 after successful edits, matching existing collection create/delete behavior.
@@ -167,6 +167,7 @@ Add focused `RequestLabCore` tests for:
 - collection color round-trips through workspace save/load
 - `renameCollection` updates the name and trims whitespace
 - `renameCollection` rejects empty names
+- `renameCollection` rejects duplicate save filenames
 - `updateCollectionColor` sets and clears the preset color
 
 Manual verification:

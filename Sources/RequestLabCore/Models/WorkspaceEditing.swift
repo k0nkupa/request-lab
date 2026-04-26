@@ -29,9 +29,20 @@ public extension APIWorkspace {
             return false
         }
 
-        return updateCollection(id: collectionID) { collection in
-            collection.name = trimmedName
+        guard let collectionIndex = collections.firstIndex(where: { $0.id == collectionID }) else {
+            return false
         }
+
+        let proposedFileName = WorkspaceFileNaming.yamlFileName(for: trimmedName)
+        let hasFileNameCollision = collections.enumerated().contains { index, collection in
+            index != collectionIndex && WorkspaceFileNaming.yamlFileName(for: collection.name) == proposedFileName
+        }
+        guard !hasFileNameCollision else {
+            return false
+        }
+
+        collections[collectionIndex].name = trimmedName
+        return true
     }
 
     mutating func updateCollectionColor(id collectionID: String, color: APICollectionColor?) -> Bool {
