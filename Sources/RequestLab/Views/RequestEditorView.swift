@@ -35,48 +35,10 @@ struct RequestEditorView: View {
 
             Divider()
 
-            TabView(selection: $selectedTab) {
-                keyValueEditor(
-                    title: "Query parameters",
-                    placeholder: "limit=50\nstatus=open",
-                    values: binding(
-                        get: { request?.params ?? [:] },
-                        set: { params in
-                            store.updateSelectedRequest { $0.params = params }
-                        }
-                    )
-                )
-                .tabItem { Text("Params") }
-                .tag(RequestEditorTab.params)
-
-                keyValueEditor(
-                    title: "Headers",
-                    placeholder: "Accept=application/json\nX-Trace={{traceId}}",
-                    values: binding(
-                        get: { request?.headers ?? [:] },
-                        set: { headers in
-                            store.updateSelectedRequest { $0.headers = headers }
-                        }
-                    )
-                )
-                .tabItem { Text("Headers") }
-                .tag(RequestEditorTab.headers)
-
-                authView
-                    .tabItem { Text("Auth") }
-                    .tag(RequestEditorTab.auth)
-
-                bodyView
-                    .tabItem { Text("Body") }
-                    .tag(RequestEditorTab.body)
-
-                graphQLView
-                    .tabItem { Text("GraphQL") }
-                    .tag(RequestEditorTab.graphQL)
-            }
-            .padding(.horizontal)
-            .padding(.top)
-            .padding(.bottom, 12)
+            requestTabPanel
+                .padding(.horizontal)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
 
             Divider()
 
@@ -120,6 +82,64 @@ struct RequestEditorView: View {
         }
     }
 
+    private var requestTabPanel: some View {
+        VStack(spacing: 18) {
+            Picker("Request editor section", selection: $selectedTab) {
+                Text("Params").tag(RequestEditorTab.params)
+                Text("Headers").tag(RequestEditorTab.headers)
+                Text("Auth").tag(RequestEditorTab.auth)
+                Text("Body").tag(RequestEditorTab.body)
+                Text("GraphQL").tag(RequestEditorTab.graphQL)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 430)
+
+            requestTabContent
+                .padding(18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(RequestLabTheme.surface)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(RequestLabTheme.editorBorder, lineWidth: 1)
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var requestTabContent: some View {
+        switch selectedTab {
+        case .params:
+            keyValueEditor(
+                title: "Query parameters",
+                placeholder: "limit=50\nstatus=open",
+                values: binding(
+                    get: { request?.params ?? [:] },
+                    set: { params in
+                        store.updateSelectedRequest { $0.params = params }
+                    }
+                )
+            )
+        case .headers:
+            keyValueEditor(
+                title: "Headers",
+                placeholder: "Accept=application/json\nX-Trace={{traceId}}",
+                values: binding(
+                    get: { request?.headers ?? [:] },
+                    set: { headers in
+                        store.updateSelectedRequest { $0.headers = headers }
+                    }
+                )
+            )
+        case .auth:
+            authView
+        case .body:
+            bodyView
+        case .graphQL:
+            graphQLView
+        }
+    }
+
     private var authView: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Authentication")
@@ -154,8 +174,6 @@ struct RequestEditorView: View {
 
             Spacer()
         }
-        .padding(.top, 24)
-        .padding(.bottom)
     }
 
     private var graphQLView: some View {
@@ -198,8 +216,6 @@ struct RequestEditorView: View {
 
             Spacer()
         }
-        .padding(.top, 24)
-        .padding(.bottom)
     }
 
     private var bodyView: some View {
@@ -252,8 +268,6 @@ struct RequestEditorView: View {
 
             Spacer()
         }
-        .padding(.top, 24)
-        .padding(.bottom)
     }
 
     private var responsePanel: some View {
@@ -341,8 +355,6 @@ struct RequestEditorView: View {
 
             Spacer()
         }
-        .padding(.top, 24)
-        .padding(.bottom)
     }
 
     private func methodBadge(_ method: HTTPMethod) -> some View {
