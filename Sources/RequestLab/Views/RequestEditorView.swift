@@ -338,19 +338,21 @@ struct RequestEditorView: View {
     }
 
     private func methodBadge(_ method: HTTPMethod) -> some View {
-        Text(method.rawValue)
+        let color = RequestLabTheme.methodColor(method)
+
+        return Text(method.rawValue)
             .font(.caption.bold())
             .monospaced()
-            .foregroundStyle(RequestLabTheme.methodColor(method))
+            .foregroundStyle(RequestLabTheme.badgeForeground(for: color))
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(
                 Capsule(style: .continuous)
-                    .fill(RequestLabTheme.softFill(RequestLabTheme.methodColor(method)))
+                    .fill(RequestLabTheme.softFill(color))
             )
             .overlay {
                 Capsule(style: .continuous)
-                    .stroke(RequestLabTheme.softStroke(RequestLabTheme.methodColor(method)), lineWidth: 1)
+                    .stroke(RequestLabTheme.softStroke(color), lineWidth: 1)
             }
     }
 
@@ -360,7 +362,7 @@ struct RequestEditorView: View {
         return Text("\(response.statusCode) - \(response.durationMilliseconds) ms")
             .font(.caption.bold())
             .monospacedDigit()
-            .foregroundStyle(color)
+            .foregroundStyle(RequestLabTheme.badgeForeground(for: color))
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(

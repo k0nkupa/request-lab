@@ -17,7 +17,8 @@ struct SidebarView: View {
 
                             environmentLabel(
                                 environment,
-                                isSelected: rowSelection == store.selectedCenterPane
+                                isSelected: rowSelection == store.selectedCenterPane,
+                                isActive: store.selectedCollectionEnvironmentIDByCollectionID[collection.id] == environment.id
                             )
                                 .tag(rowSelection)
                                 .contextMenu {
@@ -70,7 +71,11 @@ struct SidebarView: View {
                 ForEach(store.workspace.environments) { environment in
                     let rowSelection = CenterPaneSelection.globalEnvironment(environment.id)
 
-                    environmentLabel(environment, isSelected: rowSelection == store.selectedCenterPane)
+                    environmentLabel(
+                        environment,
+                        isSelected: rowSelection == store.selectedCenterPane,
+                        isActive: environment.id == store.selectedGlobalEnvironmentID
+                    )
                         .tag(rowSelection)
                         .contextMenu {
                             Button("Use Environment") {
@@ -123,15 +128,25 @@ struct SidebarView: View {
         }
     }
 
-    private func environmentLabel(_ environment: APIEnvironment, isSelected: Bool) -> some View {
-        Label {
-            Text(environment.name)
-                .foregroundStyle(isSelected ? .primary : .secondary)
-                .fontWeight(isSelected ? .semibold : .regular)
-        } icon: {
-            Image(systemName: "server.rack")
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(isSelected ? RequestLabTheme.environment : .secondary)
+    private func environmentLabel(_ environment: APIEnvironment, isSelected: Bool, isActive: Bool) -> some View {
+        HStack(spacing: 6) {
+            Label {
+                Text(environment.name)
+                    .fontWeight(isSelected || isActive ? .semibold : .regular)
+            } icon: {
+                Image(systemName: "server.rack")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(isSelected || isActive ? RequestLabTheme.environment : .secondary)
+            }
+
+            Spacer(minLength: 4)
+
+            if isActive {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(RequestLabTheme.environment)
+                    .accessibilityLabel("Active environment")
+            }
         }
     }
 

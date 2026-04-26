@@ -26,6 +26,10 @@ enum RequestLabTheme {
         color.opacity(0.35)
     }
 
+    static func badgeForeground(for _: Color) -> Color {
+        .primary
+    }
+
     static func methodColor(_ method: HTTPMethod) -> Color {
         switch method {
         case .get, .head:
