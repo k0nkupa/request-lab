@@ -181,6 +181,15 @@ struct SidebarView: View {
     }
 
     private func startRenamingCollection(_ collection: APICollection) {
+        if renamingCollectionID == collection.id {
+            isCollectionNameFieldFocused = true
+            return
+        }
+
+        if renamingCollectionID != nil {
+            commitCollectionRename()
+        }
+
         renamingCollectionID = collection.id
         collectionNameDraft = collection.name
         isCollectionNameFieldFocused = true
