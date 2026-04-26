@@ -279,7 +279,7 @@ struct SidebarView: View {
         }
 
         if renamingCollectionID != nil {
-            commitCollectionRename()
+            cancelCollectionRename()
         }
 
         renamingCollectionID = collection.id

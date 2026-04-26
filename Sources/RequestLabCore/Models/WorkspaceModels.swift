@@ -70,7 +70,8 @@ public struct APICollection: Codable, Equatable, Sendable, Identifiable {
 
         self.id = try container.decode(String.self, forKey: .id)
         self.name = try container.decode(String.self, forKey: .name)
-        self.color = try container.decodeIfPresent(APICollectionColor.self, forKey: .color)
+        self.color = try container.decodeIfPresent(String.self, forKey: .color)
+            .flatMap(APICollectionColor.init(rawValue:))
         self.environments = try container.decodeIfPresent([APIEnvironment].self, forKey: .environments) ?? []
         self.requests = try container.decodeIfPresent([APIRequest].self, forKey: .requests) ?? []
     }

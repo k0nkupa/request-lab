@@ -117,16 +117,46 @@ struct WorkspaceFileStoreTests {
 
     @Test("legacy collection YAML decodes without environments")
     func legacyCollectionYAMLDecodesWithoutEnvironments() throws {
-        let data = try #require(
-            #"{"id":"col_legacy","name":"Legacy","requests":[]}"#
-                .data(using: .utf8)
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        try writeLegacyWorkspace(
+            to: tempURL,
+            collectionYAML: """
+            id: col_legacy
+            name: Legacy
+            requests: []
+
+            """
         )
 
-        let collection = try JSONDecoder().decode(APICollection.self, from: data)
+        let workspace = try WorkspaceFileStore(fileManager: .default).load(from: tempURL)
+        let collection = try #require(workspace.collections.first)
 
         #expect(collection.id == "col_legacy")
         #expect(collection.color == nil)
         #expect(collection.environments.isEmpty)
+    }
+
+    @Test("collection YAML with unknown color decodes as default")
+    func collectionYAMLWithUnknownColorDecodesAsDefault() throws {
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        try writeLegacyWorkspace(
+            to: tempURL,
+            collectionYAML: """
+            id: col_legacy
+            name: Legacy
+            color: ultraviolet
+            requests: []
+
+            """
+        )
+
+        let workspace = try WorkspaceFileStore(fileManager: .default).load(from: tempURL)
+        let collection = try #require(workspace.collections.first)
+
+        #expect(collection.id == "col_legacy")
+        #expect(collection.color == nil)
     }
 
     @Test("secret environment values are redacted from shared YAML")
@@ -450,6 +480,21 @@ struct WorkspaceFileStoreTests {
         URL(filePath: NSTemporaryDirectory())
             .appending(path: UUID().uuidString)
             .appendingPathExtension("workspace")
+    }
+
+    private func writeLegacyWorkspace(to workspaceURL: URL, collectionYAML: String) throws {
+        let collectionsURL = workspaceURL.appending(path: "collections")
+        try FileManager.default.createDirectory(at: collectionsURL, withIntermediateDirectories: true)
+        try """
+        id: wrk_legacy
+        name: Legacy Workspace
+
+        """.write(to: workspaceURL.appending(path: "workspace.yaml"), atomically: true, encoding: .utf8)
+        try collectionYAML.write(to: collectionsURL.appending(path: "legacy.yaml"), atomically: true, encoding: .utf8)
+        try """
+        - legacy.yaml
+
+        """.write(to: collectionsURL.appending(path: ".order.yaml"), atomically: true, encoding: .utf8)
     }
 }
 
