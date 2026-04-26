@@ -78,6 +78,43 @@ struct WorkspaceFileStoreTests {
         #expect(collectionYAML.contains("env_orders_dev"))
     }
 
+    @Test("collection colors save and load inline with collections")
+    func collectionColorsRoundTrip() throws {
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let store = WorkspaceFileStore(fileManager: .default)
+        let workspace = APIWorkspace(
+            id: "wrk_collection_color",
+            name: "Collection Color Workspace",
+            collections: [
+                APICollection(
+                    id: "col_orders",
+                    name: "Orders",
+                    color: .purple,
+                    requests: [
+                        APIRequest(
+                            id: "req_orders",
+                            name: "Orders",
+                            method: .get,
+                            url: "https://api.example.test/orders"
+                        )
+                    ]
+                )
+            ]
+        )
+
+        try store.save(workspace, to: tempURL)
+        let loaded = try store.load(from: tempURL)
+        let collectionYAML = try String(
+            contentsOf: tempURL.appending(path: "collections/orders.yaml"),
+            encoding: .utf8
+        )
+
+        #expect(loaded == workspace)
+        #expect(collectionYAML.contains("color: purple"))
+    }
+
     @Test("legacy collection YAML decodes without environments")
     func legacyCollectionYAMLDecodesWithoutEnvironments() throws {
         let data = try #require(
@@ -88,6 +125,7 @@ struct WorkspaceFileStoreTests {
         let collection = try JSONDecoder().decode(APICollection.self, from: data)
 
         #expect(collection.id == "col_legacy")
+        #expect(collection.color == nil)
         #expect(collection.environments.isEmpty)
     }
 

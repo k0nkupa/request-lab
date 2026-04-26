@@ -55,7 +55,7 @@ struct WorkspaceEditingTests {
             collections: [APICollection(id: "col_orders", name: "Orders")]
         )
 
-        let didRename = workspace.renameCollection(id: "col_orders", to: "  Customer Orders  ")
+        let didRename = workspace.renameCollection(id: "col_orders", to: "\n  Customer Orders \t\n")
 
         #expect(didRename)
         #expect(workspace.collections.first?.name == "Customer Orders")
@@ -84,9 +84,11 @@ struct WorkspaceEditingTests {
         )
 
         let didSetColor = workspace.updateCollectionColor(id: "col_orders", color: .blue)
+        #expect(didSetColor)
+        #expect(workspace.collections.first?.color == .blue)
+
         let didClearColor = workspace.updateCollectionColor(id: "col_orders", color: nil)
 
-        #expect(didSetColor)
         #expect(didClearColor)
         #expect(workspace.collections.first?.color == nil)
     }
