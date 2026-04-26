@@ -65,7 +65,7 @@ struct SidebarView: View {
                                     }
                                 )
                             ) {
-                                collectionColorPicker(for: collection)
+                                collectionColorPicker(forCollectionID: collection.id)
                             }
                     }
                     .contextMenu {
@@ -164,42 +164,54 @@ struct SidebarView: View {
         }
     }
 
-    private func collectionColorPicker(for collection: APICollection) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func collectionColorPicker(forCollectionID collectionID: String) -> some View {
+        let selectedColor = store.workspace.collections.first { $0.id == collectionID }?.color
+
+        return VStack(alignment: .leading, spacing: 12) {
             Text("Collection Color")
                 .font(.headline)
 
             Button {
-                store.updateCollectionColor(id: collection.id, color: nil)
+                store.updateCollectionColor(id: collectionID, color: nil)
                 selectedColorCollectionID = nil
             } label: {
                 colorOptionLabel(
                     title: "Default",
                     color: RequestLabTheme.collectionColor(nil),
-                    isSelected: collection.color == nil
+                    isSelected: selectedColor == nil
                 )
             }
+            .accessibilityValue(selectedColor == nil ? "Selected" : "")
             .buttonStyle(.plain)
 
             Divider()
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 36), spacing: 10)], spacing: 10) {
                 ForEach(APICollectionColor.allCases) { color in
+                    let isSelected = selectedColor == color
+
                     Button {
-                        store.updateCollectionColor(id: collection.id, color: color)
+                        store.updateCollectionColor(id: collectionID, color: color)
                         selectedColorCollectionID = nil
                     } label: {
                         Circle()
                             .fill(RequestLabTheme.collectionColor(color))
                             .frame(width: 24, height: 24)
                             .overlay {
-                                if collection.color == color {
-                                    Image(systemName: "checkmark")
+                                Circle()
+                                    .stroke(isSelected ? Color.primary : Color.clear, lineWidth: 2)
+                                    .frame(width: 30, height: 30)
+                            }
+                            .overlay {
+                                if isSelected {
+                                    Image(systemName: "checkmark.circle.fill")
                                         .font(.caption.bold())
-                                        .foregroundStyle(.white)
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, Color.primary)
                                 }
                             }
                             .accessibilityLabel(color.rawValue.capitalized)
+                            .accessibilityValue(isSelected ? "Selected" : "")
                     }
                     .buttonStyle(.plain)
                 }
