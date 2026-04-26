@@ -14,6 +14,43 @@ public extension APIWorkspace {
         return true
     }
 
+    mutating func updateCollection(id collectionID: String, mutate: (inout APICollection) -> Void) -> Bool {
+        guard let collectionIndex = collections.firstIndex(where: { $0.id == collectionID }) else {
+            return false
+        }
+
+        mutate(&collections[collectionIndex])
+        return true
+    }
+
+    mutating func renameCollection(id collectionID: String, to name: String) -> Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            return false
+        }
+
+        guard let collectionIndex = collections.firstIndex(where: { $0.id == collectionID }) else {
+            return false
+        }
+
+        let proposedFileName = WorkspaceFileNaming.yamlFileName(for: trimmedName)
+        let hasFileNameCollision = collections.enumerated().contains { index, collection in
+            index != collectionIndex && WorkspaceFileNaming.yamlFileName(for: collection.name) == proposedFileName
+        }
+        guard !hasFileNameCollision else {
+            return false
+        }
+
+        collections[collectionIndex].name = trimmedName
+        return true
+    }
+
+    mutating func updateCollectionColor(id collectionID: String, color: APICollectionColor?) -> Bool {
+        updateCollection(id: collectionID) { collection in
+            collection.color = color
+        }
+    }
+
     mutating func addRequest(_ request: APIRequest, toCollectionID collectionID: String) -> Bool {
         guard let collectionIndex = collections.firstIndex(where: { $0.id == collectionID }) else {
             return false

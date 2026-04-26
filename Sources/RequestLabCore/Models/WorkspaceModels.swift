@@ -22,22 +22,45 @@ public struct APIWorkspace: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+public enum APICollectionColor: String, Codable, Equatable, Sendable, CaseIterable, Identifiable {
+    case blue
+    case green
+    case red
+    case purple
+    case orange
+    case cyan
+    case indigo
+    case pink
+    case gray
+
+    public var id: String { rawValue }
+}
+
 public struct APICollection: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var name: String
+    public var color: APICollectionColor?
     public var environments: [APIEnvironment]
     public var requests: [APIRequest]
 
     private enum CodingKeys: String, CodingKey {
         case id
         case name
+        case color
         case environments
         case requests
     }
 
-    public init(id: String, name: String, environments: [APIEnvironment] = [], requests: [APIRequest] = []) {
+    public init(
+        id: String,
+        name: String,
+        color: APICollectionColor? = nil,
+        environments: [APIEnvironment] = [],
+        requests: [APIRequest] = []
+    ) {
         self.id = id
         self.name = name
+        self.color = color
         self.environments = environments
         self.requests = requests
     }
@@ -47,6 +70,8 @@ public struct APICollection: Codable, Equatable, Sendable, Identifiable {
 
         self.id = try container.decode(String.self, forKey: .id)
         self.name = try container.decode(String.self, forKey: .name)
+        self.color = try container.decodeIfPresent(String.self, forKey: .color)
+            .flatMap(APICollectionColor.init(rawValue:))
         self.environments = try container.decodeIfPresent([APIEnvironment].self, forKey: .environments) ?? []
         self.requests = try container.decodeIfPresent([APIRequest].self, forKey: .requests) ?? []
     }

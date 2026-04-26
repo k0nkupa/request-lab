@@ -47,6 +47,69 @@ struct WorkspaceEditingTests {
         #expect(workspace.collections.isEmpty)
     }
 
+    @Test("renames collections by id")
+    func renamesCollectionsByID() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [APICollection(id: "col_orders", name: "Orders")]
+        )
+
+        let didRename = workspace.renameCollection(id: "col_orders", to: "\n  Customer Orders \t\n")
+
+        #expect(didRename)
+        #expect(workspace.collections.first?.name == "Customer Orders")
+    }
+
+    @Test("rename collection rejects empty names")
+    func renameCollectionRejectsEmptyNames() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [APICollection(id: "col_orders", name: "Orders")]
+        )
+
+        let didRename = workspace.renameCollection(id: "col_orders", to: "   ")
+
+        #expect(!didRename)
+        #expect(workspace.collections.first?.name == "Orders")
+    }
+
+    @Test("rename collection rejects duplicate save filenames")
+    func renameCollectionRejectsDuplicateSaveFilenames() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(id: "col_foo", name: "Foo Bar"),
+                APICollection(id: "col_orders", name: "Orders"),
+            ]
+        )
+
+        let didRename = workspace.renameCollection(id: "col_orders", to: "Foo/Bar")
+
+        #expect(!didRename)
+        #expect(workspace.collections.map(\.name) == ["Foo Bar", "Orders"])
+    }
+
+    @Test("sets and clears collection colors")
+    func setsAndClearsCollectionColors() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [APICollection(id: "col_orders", name: "Orders")]
+        )
+
+        let didSetColor = workspace.updateCollectionColor(id: "col_orders", color: .blue)
+        #expect(didSetColor)
+        #expect(workspace.collections.first?.color == .blue)
+
+        let didClearColor = workspace.updateCollectionColor(id: "col_orders", color: nil)
+
+        #expect(didClearColor)
+        #expect(workspace.collections.first?.color == nil)
+    }
+
     @Test("adds and deletes requests")
     func addsAndDeletesRequests() {
         var workspace = APIWorkspace(

@@ -214,6 +214,22 @@ final class AppStore {
         clearExecutionState()
     }
 
+    func renameCollection(id collectionID: String, to name: String) {
+        guard workspace.renameCollection(id: collectionID, to: name) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
+    func updateCollectionColor(id collectionID: String, color: APICollectionColor?) {
+        guard workspace.updateCollectionColor(id: collectionID, color: color) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
     func createRequest(kind: APIRequestKind = .rest) {
         if workspace.collections.isEmpty {
             createCollection()

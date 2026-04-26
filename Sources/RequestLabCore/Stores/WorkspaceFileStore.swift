@@ -283,24 +283,12 @@ public final class WorkspaceFileStore: Sendable {
         }
     }
 
-    private func fileName(for name: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let scalars = name.lowercased().unicodeScalars.map { scalar in
-            allowed.contains(scalar) ? Character(scalar) : "-"
-        }
-        let candidate = String(scalars)
-            .split(separator: "-")
-            .joined(separator: "-")
-
-        return candidate.isEmpty ? "item" : candidate
-    }
-
     private func fileNames(for names: [String], itemKind: String) throws -> [String] {
         var seenFileNames = Set<String>()
         var resolvedFileNames: [String] = []
 
         for name in names {
-            let resolvedFileName = "\(fileName(for: name)).yaml"
+            let resolvedFileName = WorkspaceFileNaming.yamlFileName(for: name)
             guard seenFileNames.insert(resolvedFileName).inserted else {
                 throw RequestLabError.invalidWorkspace("Duplicate \(itemKind) filename: \(resolvedFileName)")
             }

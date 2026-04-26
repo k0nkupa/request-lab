@@ -78,17 +78,85 @@ struct WorkspaceFileStoreTests {
         #expect(collectionYAML.contains("env_orders_dev"))
     }
 
-    @Test("legacy collection YAML decodes without environments")
-    func legacyCollectionYAMLDecodesWithoutEnvironments() throws {
-        let data = try #require(
-            #"{"id":"col_legacy","name":"Legacy","requests":[]}"#
-                .data(using: .utf8)
+    @Test("collection colors save and load inline with collections")
+    func collectionColorsRoundTrip() throws {
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let store = WorkspaceFileStore(fileManager: .default)
+        let workspace = APIWorkspace(
+            id: "wrk_collection_color",
+            name: "Collection Color Workspace",
+            collections: [
+                APICollection(
+                    id: "col_orders",
+                    name: "Orders",
+                    color: .purple,
+                    requests: [
+                        APIRequest(
+                            id: "req_orders",
+                            name: "Orders",
+                            method: .get,
+                            url: "https://api.example.test/orders"
+                        )
+                    ]
+                )
+            ]
         )
 
-        let collection = try JSONDecoder().decode(APICollection.self, from: data)
+        try store.save(workspace, to: tempURL)
+        let loaded = try store.load(from: tempURL)
+        let collectionYAML = try String(
+            contentsOf: tempURL.appending(path: "collections/orders.yaml"),
+            encoding: .utf8
+        )
+
+        #expect(loaded == workspace)
+        #expect(collectionYAML.contains("color: purple"))
+    }
+
+    @Test("legacy collection YAML decodes without environments")
+    func legacyCollectionYAMLDecodesWithoutEnvironments() throws {
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        try writeLegacyWorkspace(
+            to: tempURL,
+            collectionYAML: """
+            id: col_legacy
+            name: Legacy
+            requests: []
+
+            """
+        )
+
+        let workspace = try WorkspaceFileStore(fileManager: .default).load(from: tempURL)
+        let collection = try #require(workspace.collections.first)
 
         #expect(collection.id == "col_legacy")
+        #expect(collection.color == nil)
         #expect(collection.environments.isEmpty)
+    }
+
+    @Test("collection YAML with unknown color decodes as default")
+    func collectionYAMLWithUnknownColorDecodesAsDefault() throws {
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        try writeLegacyWorkspace(
+            to: tempURL,
+            collectionYAML: """
+            id: col_legacy
+            name: Legacy
+            color: ultraviolet
+            requests: []
+
+            """
+        )
+
+        let workspace = try WorkspaceFileStore(fileManager: .default).load(from: tempURL)
+        let collection = try #require(workspace.collections.first)
+
+        #expect(collection.id == "col_legacy")
+        #expect(collection.color == nil)
     }
 
     @Test("secret environment values are redacted from shared YAML")
@@ -412,6 +480,21 @@ struct WorkspaceFileStoreTests {
         URL(filePath: NSTemporaryDirectory())
             .appending(path: UUID().uuidString)
             .appendingPathExtension("workspace")
+    }
+
+    private func writeLegacyWorkspace(to workspaceURL: URL, collectionYAML: String) throws {
+        let collectionsURL = workspaceURL.appending(path: "collections")
+        try FileManager.default.createDirectory(at: collectionsURL, withIntermediateDirectories: true)
+        try """
+        id: wrk_legacy
+        name: Legacy Workspace
+
+        """.write(to: workspaceURL.appending(path: "workspace.yaml"), atomically: true, encoding: .utf8)
+        try collectionYAML.write(to: collectionsURL.appending(path: "legacy.yaml"), atomically: true, encoding: .utf8)
+        try """
+        - legacy.yaml
+
+        """.write(to: collectionsURL.appending(path: ".order.yaml"), atomically: true, encoding: .utf8)
     }
 }
 
