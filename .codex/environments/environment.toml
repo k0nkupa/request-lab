@@ -3,7 +3,10 @@ version = 1
 name = "RequestLab"
 
 [setup]
-script = ""
+script = '''
+cd "$CODEX_WORKTREE_PATH"
+rtk swift package resolve
+'''
 
 [[actions]]
 name = "Run"
