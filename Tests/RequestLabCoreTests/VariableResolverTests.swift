@@ -4,6 +4,19 @@ import Testing
 
 @Suite("Variable resolver")
 struct VariableResolverTests {
+    @Test("parses variable token segments")
+    func parsesVariableTokenSegments() {
+        let segments = VariableTokenParser.segments(in: "{{baseUrl}}/orders/{{ orderId }}")
+
+        #expect(
+            segments == [
+                .variable(rawValue: "{{baseUrl}}", name: "baseUrl"),
+                .text("/orders/"),
+                .variable(rawValue: "{{ orderId }}", name: "orderId")
+            ]
+        )
+    }
+
     @Test("resolves URL, query params, headers, auth, and JSON body")
     func resolvesRequestParts() throws {
         let request = APIRequest(

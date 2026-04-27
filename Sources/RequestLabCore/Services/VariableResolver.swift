@@ -193,24 +193,19 @@ public struct VariableResolver: Sendable {
     }
 
     private func resolveVariables(in value: String, variables: [String: String]) throws -> String {
-        var output = value
-        let pattern = #"\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}"#
-        let regex = try NSRegularExpression(pattern: pattern)
-        let matches = regex.matches(in: value, range: NSRange(value.startIndex..., in: value)).reversed()
+        var output = ""
 
-        for match in matches {
-            guard let nameRange = Range(match.range(at: 1), in: value),
-                  let tokenRange = Range(match.range(at: 0), in: value)
-            else {
-                continue
+        for segment in VariableTokenParser.segments(in: value) {
+            switch segment {
+            case .text(let text):
+                output += text
+            case .variable(_, let name):
+                guard let replacement = variables[name] else {
+                    throw RequestLabError.invalidWorkspace("Unresolved variable: \(name)")
+                }
+
+                output += replacement
             }
-
-            let name = String(value[nameRange])
-            guard let replacement = variables[name] else {
-                throw RequestLabError.invalidWorkspace("Unresolved variable: \(name)")
-            }
-
-            output.replaceSubrange(tokenRange, with: replacement)
         }
 
         return output

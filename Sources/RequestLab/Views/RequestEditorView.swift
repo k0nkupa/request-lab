@@ -69,8 +69,7 @@ struct RequestEditorView: View {
             .labelsHidden()
             .frame(width: 110)
 
-            TextField("Request URL", text: requestURLBinding)
-                .textFieldStyle(.roundedBorder)
+            VariableTokenTextField("Request URL", text: requestURLBinding)
 
             Button("Send", systemImage: "paperplane.fill") {
                 Task {
@@ -183,8 +182,7 @@ struct RequestEditorView: View {
                 .font(.headline)
 
             if request?.kind == .graphQL {
-                TextField("Operation name", text: graphQLOperationNameBinding)
-                    .textFieldStyle(.roundedBorder)
+                VariableTokenTextField("Operation name", text: graphQLOperationNameBinding)
                     .padding(.top, 6)
 
                 GroupBox("Query") {
