@@ -1,60 +1,65 @@
 # RequestLab
 
 <p align="center">
-  <img src="./Resources/app-icon.png" alt="RequestLab app icon" width="160" height="160" />
+  <img src="./Resources/app-icon.png" alt="RequestLab app icon" width="150" height="150" />
+</p>
+
+<h3 align="center">A native macOS API client for REST and GraphQL.</h3>
+
+<p align="center">
+  Fast to open, local-first, readable on disk, and not trying to become a browser tab with delusions of grandeur.
 </p>
 
 <p align="center">
-  A native macOS API client for REST and GraphQL.
-  <br />
-  Fast to open, local-first, and not trying to become a browser tab with delusions of grandeur.
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-111111?style=for-the-badge&logo=apple&logoColor=white" />
+  <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-FA7343?style=for-the-badge&logo=swift&logoColor=white" />
+  <img alt="Swift Package Manager" src="https://img.shields.io/badge/SwiftPM-package-2F6FDD?style=for-the-badge" />
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0B7A75?style=for-the-badge" />
 </p>
 
-## Why RequestLab
+<p align="center">
+  <img src="./Resources/requestlab-screenshot.png" alt="RequestLab showing a three-pane macOS API workspace with request editor, environments, and inspector" />
+</p>
 
-RequestLab is an open-source macOS app built with SwiftUI and Swift Package Manager. It is designed for developers who want a lightweight native client for working with HTTP APIs, GraphQL operations, local workspaces, and environment variables without dragging an entire Electron apartment building into memory.
+## What It Is
 
-It currently focuses on the core workflow:
+RequestLab is an open-source SwiftUI macOS app for working with HTTP APIs without hauling around an Electron moving truck. It gives you a native three-pane workspace for collections, requests, environments, response inspection, and local request history.
 
-- Create and edit REST and GraphQL requests
-- Organize requests in local workspace folders
-- Load and save YAML-based workspaces
-- Import Postman collection and environment JSON
-- Resolve variables from global and collection-scoped environments
-- Store secret variable values in macOS Keychain
-- Send requests with `URLSession`
-- Inspect response status, headers, body, timing, and local history
+The project is built with Swift Package Manager. The UI lives in the app target, while request execution, workspace persistence, validation, import logic, variable resolution, and Keychain-backed secrets live in `RequestLabCore` so they can be tested without launching the app.
 
-## Highlights
+## Features
 
-- Native SwiftUI macOS interface with a three-pane request workflow
-- REST and GraphQL support, including operation name and variables
-- Local-first workspace format backed by readable YAML files
-- Collection-scoped environments layered over global environments
+- Native SwiftUI macOS interface with a sidebar, request editor, and inspector
+- REST request editing for method, URL, query params, headers, auth, and body
+- GraphQL request support with operation name, query, and variables JSON
+- Environment variables with global and collection-scoped layering
+- Secret variable values stored in macOS Keychain instead of shared YAML files
+- Local-first `.workspace` folders backed by readable YAML
+- Workspace open, save, and save-as flows
+- Postman collection and environment JSON import
 - Request validation before send
-- JSON formatting helpers
-- Secret environment values stored in Keychain instead of shared files
-- Postman import support for bootstrapping existing API work
-- Open-source Swift Package Manager project with a focused test suite
-
-## Status
-
-RequestLab is already usable for day-to-day API iteration, but it is still early-stage software. The foundation is in place and tested; the polish roadmap is still catching up.
-
-Current scope includes:
-
-- Workspace open, save, and save-as flows for `.workspace` folders
-- Request editing for method, URL, params, headers, auth, body, and GraphQL fields
-- Global and collection environment editing
-- Response tabs for body and headers
-- Request history stored in local app-private workspace state
+- Request execution through `URLSession`
+- Response inspection for status, headers, body, duration, and URL
+- Local request history stored under app-private workspace state
+- JSON formatting helpers for request bodies and GraphQL variables
 - Release packaging for zipped macOS `.app` bundles
+
+## Why It Exists
+
+Most API clients eventually become a cloud workspace, a team billing page, and a Chromium process wearing a trench coat. RequestLab is intentionally smaller:
+
+- Your workspace is a folder on disk.
+- Your shared data is readable YAML.
+- Your secrets stay in Keychain.
+- Your app opens like a macOS app should.
+
+That is the whole pitch. Shocking restraint, apparently.
 
 ## Requirements
 
 - macOS 14 Sonoma or later
 - Xcode command line tools with Swift 6 support
-- `rtk` for running repo commands
+- `rtk` for repo commands
 
 ## Quick Start
 
@@ -73,30 +78,9 @@ rtk ./script/package_release.sh
 rtk swift script/generate_app_icon.swift
 ```
 
-## Project Structure
-
-```text
-Sources/
-  RequestLab/          SwiftUI app target
-  RequestLabCore/      Domain models, persistence, execution, validation, services
-Tests/
-  RequestLabCoreTests/ Core test suite
-Fixtures/
-  SampleWorkspace.workspace/
-Resources/
-  AppIcon.icns
-  app-icon.png
-script/
-  build_and_run.sh
-  package_release.sh
-  generate_app_icon.swift
-```
-
-Business logic lives in `RequestLabCore` so it can be tested without launching the UI. The app target owns SwiftUI views and app state.
-
 ## Workspace Format
 
-Workspaces are folder-based and intentionally readable:
+Workspaces are folder-based and intentionally boring, which is a compliment.
 
 ```text
 Example.workspace/
@@ -111,29 +95,41 @@ Example.workspace/
     history.yaml
 ```
 
-- `workspace.yaml` stores workspace metadata
-- `collections/` stores request collections
-- `environments/` stores global environments
-- `.order.yaml` files preserve ordering
-- `.client/` stores local-only app state such as request history
+- `workspace.yaml` stores workspace metadata.
+- `collections/` stores request collections.
+- `environments/` stores global environments.
+- `.order.yaml` files preserve ordering.
+- `.client/` stores local-only app state such as request history.
 
-Secret variables are written to shared YAML without values. Runtime values are stored in macOS Keychain using stable identifiers from the workspace and variable metadata.
+Secret variables are written to shared YAML without secret values. Runtime values are stored in macOS Keychain using stable identifiers from the workspace and variable metadata.
+
+## Project Structure
+
+```text
+Sources/
+  RequestLab/          SwiftUI app target
+  RequestLabCore/      Domain models, persistence, execution, validation, services
+Tests/
+  RequestLabCoreTests/ Core Swift Testing suite
+Fixtures/
+  SampleWorkspace.workspace/
+Resources/
+  AppIcon.icns
+  app-icon.png
+  requestlab-screenshot.png
+script/
+  build_and_run.sh
+  package_release.sh
+  generate_app_icon.swift
+```
+
+Keep portable behavior in `RequestLabCore`. Keep SwiftUI state and presentation in `Sources/RequestLab`.
 
 ## Testing
 
-The current test suite covers:
+The current suite covers workspace round trips, fixture compatibility, request validation, variable resolution, REST and GraphQL execution behavior, Keychain secret storage, Postman import mapping, JSON formatting, and workspace editing behavior.
 
-- YAML workspace load and save round trips
-- Fixture compatibility
-- Request validation
-- Variable resolution
-- REST and GraphQL execution behavior
-- Keychain secret storage
-- Postman import mapping
-- JSON formatting helpers
-- Workspace editing behavior
-
-Run the suite with:
+Run it with:
 
 ```bash
 rtk swift test
@@ -148,10 +144,6 @@ rtk ./script/package_release.sh
 ```
 
 Release notes, signing, and checksum details live in [docs/RELEASE.md](./docs/RELEASE.md).
-
-## Open Source
-
-RequestLab is intended to be published as an open-source project. Before you flip the repo public, make sure the repository includes an explicit license file. Without one, other developers can read the code but do not automatically have permission to use, modify, or distribute it. That is not open source. That is just public suspense.
 
 ## Contributing
 
@@ -169,12 +161,7 @@ Before sending changes:
 rtk swift test
 ```
 
-## Roadmap
+## License
 
-Near-term improvements likely include:
-
-- richer workspace sharing flows
-- more request authoring ergonomics
-- better response inspection and history tooling
-- stronger release automation for public distribution
+RequestLab is released under the [MIT License](./LICENSE).
 
