@@ -11,11 +11,45 @@ struct ContentView: View {
     @State private var isCommandPalettePresented = false
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView(store: store)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-        } detail: {
+        VStack(spacing: 0) {
+            WorkbenchTopBar(
+                workspaceTitle: store.workspaceLocationTitle,
+                isSending: store.isSending,
+                canSend: store.selectedRequest != nil && !store.isSending,
+                isInspectorVisible: store.isInspectorVisible,
+                send: {
+                    Task {
+                        await store.sendSelectedRequest()
+                    }
+                },
+                toggleInspector: {
+                    store.isInspectorVisible.toggle()
+                },
+                environmentControl: {
+                    environmentMenu
+                },
+                actions: {
+                    topBarActions
+                }
+            )
+
+            Divider()
+
             HSplitView {
+                WorkbenchRailView(
+                    selectedSection: Binding(
+                        get: { activeWorkbenchSection },
+                        set: { selectWorkbenchSection($0) }
+                    ),
+                    openCommandPalette: {
+                        isCommandPalettePresented = true
+                    }
+                )
+                .frame(width: 54)
+
+                SidebarView(store: store)
+                    .frame(minWidth: 230, idealWidth: 270, maxWidth: 330)
+
                 centerWorkspace
                     .frame(minWidth: 620)
                     .background(RequestLabTheme.background)
@@ -24,74 +58,6 @@ struct ContentView: View {
                     InspectorView(store: store)
                         .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
                         .background(RequestLabTheme.surface)
-                }
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup {
-                ToolbarIconButton("Open workspace", systemImage: "folder") {
-                    openWorkspacePanel()
-                }
-                .keyboardShortcut("o", modifiers: .command)
-
-                ToolbarIconButton("Create item", systemImage: "plus") {
-                    createItemPopover
-                }
-
-                ToolbarIconButton("Import and export", systemImage: "square.and.arrow.down") {
-                    importPopover
-                }
-
-                ToolbarIconButton("Command palette", systemImage: "command") {
-                    isCommandPalettePresented = true
-                }
-                .keyboardShortcut("k", modifiers: .command)
-
-                ToolbarIconButton("Send request", systemImage: "paperplane") {
-                    Task {
-                        await store.sendSelectedRequest()
-                    }
-                }
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(store.selectedRequest == nil || store.isSending)
-
-                ToolbarIconButton("Delete selected request", systemImage: "trash", role: .destructive) {
-                    isDeleteSelectedRequestConfirmationPresented = true
-                }
-                .keyboardShortcut(.delete, modifiers: [])
-                .disabled(store.selectedRequest == nil)
-
-                ToolbarIconButton("Save workspace", systemImage: "square.and.arrow.down") {
-                    if store.workspaceURL == nil {
-                        saveWorkspacePanel()
-                    } else {
-                        store.saveWorkspace()
-                    }
-                }
-                .keyboardShortcut("s", modifiers: .command)
-
-                ToolbarIconButton("Save workspace as", systemImage: "square.and.arrow.down.on.square") {
-                    saveWorkspacePanel()
-                }
-                .keyboardShortcut("s", modifiers: [.command, .shift])
-            }
-
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 12) {
-                    Text(store.workspaceLocationTitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    environmentMenu
-                }
-            }
-
-            ToolbarItem {
-                ToolbarIconButton(
-                    store.isInspectorVisible ? "Hide inspector" : "Show inspector",
-                    systemImage: store.isInspectorVisible ? "sidebar.trailing" : "sidebar.right"
-                ) {
-                    store.isInspectorVisible.toggle()
                 }
             }
         }
@@ -142,6 +108,59 @@ struct ContentView: View {
         }
     }
 
+    private var topBarActions: some View {
+        HStack(spacing: RequestLabSpacing.sm) {
+            ToolbarIconButton("Open workspace", systemImage: "folder") {
+                openWorkspacePanel()
+            }
+            .keyboardShortcut("o", modifiers: .command)
+
+            ToolbarIconButton("Create item", systemImage: "plus") {
+                createItemPopover
+            }
+
+            ToolbarIconButton("Import and export", systemImage: "square.and.arrow.down") {
+                importPopover
+            }
+
+            ToolbarIconButton("Command palette", systemImage: "command") {
+                isCommandPalettePresented = true
+            }
+            .keyboardShortcut("k", modifiers: .command)
+
+            ToolbarIconButton("Delete selected request", systemImage: "trash", role: .destructive) {
+                isDeleteSelectedRequestConfirmationPresented = true
+            }
+            .keyboardShortcut(.delete, modifiers: [])
+            .disabled(store.selectedRequest == nil)
+
+            ToolbarIconButton("Save workspace", systemImage: "square.and.arrow.down") {
+                if store.workspaceURL == nil {
+                    saveWorkspacePanel()
+                } else {
+                    store.saveWorkspace()
+                }
+            }
+            .keyboardShortcut("s", modifiers: .command)
+
+            ToolbarIconButton("Save workspace as", systemImage: "square.and.arrow.down.on.square") {
+                saveWorkspacePanel()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+        }
+    }
+
+    private var activeWorkbenchSection: WorkbenchSection {
+        switch store.selectedCenterPane {
+        case .globalEnvironment, .collectionEnvironment:
+            .environments
+        case .history:
+            .history
+        case .request, .none:
+            .requests
+        }
+    }
+
     private var environmentMenu: some View {
         Menu {
             Section("Global Environments") {
@@ -176,9 +195,8 @@ struct ContentView: View {
         } label: {
             Label(store.environmentPairTitle, systemImage: "server.rack")
         }
-        .frame(minWidth: 180)
-        .tint(RequestLabTheme.environment)
         .help("Select global and collection environments")
+        .accessibilityLabel("Environment: \(store.environmentPairTitle)")
     }
 
     private var createItemPopover: some View {
@@ -336,6 +354,63 @@ struct ContentView: View {
         }
 
         store.openWorkspace(at: url)
+    }
+
+    private func selectWorkbenchSection(_ section: WorkbenchSection) {
+        switch section {
+        case .requests:
+            selectFirstRequest()
+        case .environments:
+            selectFirstEnvironment()
+        case .history:
+            selectFirstHistoryEntry()
+        case .commands:
+            isCommandPalettePresented = true
+        }
+    }
+
+    private func selectFirstRequest() {
+        guard let requestID = store.workspace.collections
+            .flatMap(\.requests)
+            .first?
+            .id
+        else {
+            store.createRequest()
+            return
+        }
+
+        store.selectCenterPane(.request(requestID))
+    }
+
+    private func selectFirstEnvironment() {
+        if let environmentID = store.selectedGlobalEnvironmentID,
+           store.workspace.environments.contains(where: { $0.id == environmentID })
+        {
+            store.selectCenterPane(.globalEnvironment(environmentID))
+            return
+        }
+
+        if let environmentID = store.workspace.environments.first?.id {
+            store.selectCenterPane(.globalEnvironment(environmentID))
+            return
+        }
+
+        for collection in store.workspace.collections {
+            if let environmentID = collection.environments.first?.id {
+                store.selectCenterPane(.collectionEnvironment(collectionID: collection.id, environmentID: environmentID))
+                return
+            }
+        }
+
+        store.createEnvironment()
+    }
+
+    private func selectFirstHistoryEntry() {
+        guard let historyID = store.workspace.history.first?.id else {
+            return
+        }
+
+        store.selectCenterPane(.history(historyID))
     }
 
     private func saveWorkspacePanel() {
