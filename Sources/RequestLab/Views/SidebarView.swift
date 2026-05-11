@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Bindable var store: AppStore
+    @State private var sidebarSearchText = ""
     @State private var renamingCollectionID: String?
     @State private var collectionNameDraft = ""
     @FocusState private var isCollectionNameFieldFocused: Bool
@@ -11,9 +12,9 @@ struct SidebarView: View {
     var body: some View {
         List(selection: selection) {
             Section("Collections") {
-                ForEach(store.workspace.collections) { collection in
+                ForEach(filteredCollections) { collection in
                     DisclosureGroup {
-                        ForEach(collection.environments) { environment in
+                        ForEach(filteredCollectionEnvironments(in: collection)) { environment in
                             let rowSelection = CenterPaneSelection.collectionEnvironment(
                                 collectionID: collection.id,
                                 environmentID: environment.id
@@ -41,7 +42,7 @@ struct SidebarView: View {
                                 }
                         }
 
-                        ForEach(collection.requests) { request in
+                        ForEach(filteredRequests(in: collection)) { request in
                             let rowSelection = CenterPaneSelection.request(request.id)
 
                             requestLabel(request, isSelected: rowSelection == store.selectedCenterPane)
@@ -97,7 +98,7 @@ struct SidebarView: View {
             }
 
             Section("Global Environments") {
-                ForEach(store.workspace.environments) { environment in
+                ForEach(filteredGlobalEnvironments) { environment in
                     let rowSelection = CenterPaneSelection.globalEnvironment(environment.id)
 
                     environmentLabel(
@@ -125,15 +126,96 @@ struct SidebarView: View {
                         systemImage: "clock",
                         description: Text("Responses will appear here after requests run.")
                     )
+                } else if filteredHistory.isEmpty {
+                    ContentUnavailableView.search
                 } else {
-                    ForEach(store.workspace.history) { entry in
-                        Label(entry.url, systemImage: "clock")
+                    ForEach(filteredHistory) { entry in
+                        historyLabel(entry)
                     }
                 }
             }
         }
         .listStyle(.sidebar)
+        .searchable(text: $sidebarSearchText, placement: .sidebar, prompt: "Search")
         .navigationTitle(store.editorTitle)
+    }
+
+    private var normalizedSearchText: String {
+        sidebarSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isFilteringSidebar: Bool {
+        !normalizedSearchText.isEmpty
+    }
+
+    private var filteredCollections: [APICollection] {
+        guard isFilteringSidebar else {
+            return store.workspace.collections
+        }
+
+        return store.workspace.collections.filter { collection in
+            collectionMatchesSearch(collection)
+                || !filteredCollectionEnvironments(in: collection).isEmpty
+                || !filteredRequests(in: collection).isEmpty
+        }
+    }
+
+    private var filteredGlobalEnvironments: [APIEnvironment] {
+        guard isFilteringSidebar else {
+            return store.workspace.environments
+        }
+
+        return store.workspace.environments.filter(environmentMatchesSearch)
+    }
+
+    private var filteredHistory: [APIHistoryEntry] {
+        guard isFilteringSidebar else {
+            return store.workspace.history
+        }
+
+        return store.workspace.history.filter { entry in
+            matchesSearch(entry.url)
+        }
+    }
+
+    private func filteredCollectionEnvironments(in collection: APICollection) -> [APIEnvironment] {
+        guard isFilteringSidebar else {
+            return collection.environments
+        }
+
+        if collectionMatchesSearch(collection) {
+            return collection.environments
+        }
+
+        return collection.environments.filter(environmentMatchesSearch)
+    }
+
+    private func filteredRequests(in collection: APICollection) -> [APIRequest] {
+        guard isFilteringSidebar else {
+            return collection.requests
+        }
+
+        if collectionMatchesSearch(collection) {
+            return collection.requests
+        }
+
+        return collection.requests.filter(requestMatchesSearch)
+    }
+
+    private func collectionMatchesSearch(_ collection: APICollection) -> Bool {
+        matchesSearch(collection.name)
+    }
+
+    private func requestMatchesSearch(_ request: APIRequest) -> Bool {
+        matchesSearch(request.name) || matchesSearch(request.url)
+    }
+
+    private func environmentMatchesSearch(_ environment: APIEnvironment) -> Bool {
+        matchesSearch(environment.name)
+    }
+
+    private func matchesSearch(_ value: String) -> Bool {
+        value.localizedCaseInsensitiveContains(normalizedSearchText)
     }
 
     @ViewBuilder
@@ -247,6 +329,37 @@ struct SidebarView: View {
             Image(systemName: request.kind == .graphQL ? "curlybraces" : "doc.text")
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(request.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
+        }
+    }
+
+    private func historyLabel(_ entry: APIHistoryEntry) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.url)
+                    .lineLimit(1)
+
+                HStack(spacing: 6) {
+                    Text(entry.method.rawValue)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(RequestLabTheme.methodColor(entry.method))
+
+                    if let statusCode = entry.statusCode {
+                        Text("\(statusCode)")
+                            .foregroundStyle(RequestLabTheme.responseColor(statusCode: statusCode))
+                    }
+
+                    if let durationMilliseconds = entry.durationMilliseconds {
+                        Text("\(durationMilliseconds) ms")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+        } icon: {
+            Image(systemName: "clock")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
         }
     }
 
