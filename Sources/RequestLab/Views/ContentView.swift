@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @Bindable var store: AppStore
     @State private var isDeleteSelectedRequestConfirmationPresented = false
+    @State private var isCurlImportPresented = false
+    @State private var curlImportText = ""
 
     var body: some View {
         NavigationSplitView {
@@ -115,6 +117,20 @@ struct ContentView: View {
         } message: {
             Text("Delete \"\(store.selectedRequest?.name ?? "selected request")\"? This cannot be undone.")
         }
+        .sheet(isPresented: $isCurlImportPresented) {
+            CurlImportSheet(
+                command: $curlImportText,
+                onCancel: {
+                    curlImportText = ""
+                    isCurlImportPresented = false
+                },
+                onImport: {
+                    store.importCurlCommand(curlImportText)
+                    curlImportText = ""
+                    isCurlImportPresented = false
+                }
+            )
+        }
     }
 
     private var environmentMenu: some View {
@@ -191,6 +207,17 @@ struct ContentView: View {
             Button("Postman Environment") {
                 importPostmanEnvironmentPanel()
             }
+
+            Divider()
+
+            Button("cURL Command") {
+                isCurlImportPresented = true
+            }
+
+            Button("Copy Selected as cURL") {
+                copySelectedRequestAsCurl()
+            }
+            .disabled(store.selectedRequest == nil)
         }
         .buttonStyle(.plain)
         .padding(10)
@@ -248,6 +275,15 @@ struct ContentView: View {
         }
     }
 
+    private func copySelectedRequestAsCurl() {
+        guard let command = store.curlCommandForSelectedRequest() else {
+            return
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(command, forType: .string)
+    }
+
     private func openJSONPanel(prompt: String, onSelect: (URL) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
@@ -261,6 +297,53 @@ struct ContentView: View {
         }
 
         onSelect(url)
+    }
+}
+
+private struct CurlImportSheet: View {
+    @Binding var command: String
+    let onCancel: () -> Void
+    let onImport: () -> Void
+
+    private var canImport: Bool {
+        !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Import cURL", systemImage: "terminal")
+                    .font(.title2.bold())
+
+                Spacer()
+            }
+
+            TextEditor(text: $command)
+                .font(.system(.body, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .frame(width: 620, height: 220)
+                .padding(8)
+                .background(RequestLabTheme.elevatedSurface)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(RequestLabTheme.editorBorder, lineWidth: 1)
+                }
+
+            HStack {
+                Spacer()
+
+                Button("Cancel", role: .cancel) {
+                    onCancel()
+                }
+
+                Button("Import", systemImage: "square.and.arrow.down") {
+                    onImport()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canImport)
+            }
+        }
+        .padding(18)
     }
 }
 

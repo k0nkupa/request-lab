@@ -27,6 +27,10 @@ final class AppStore {
     @ObservationIgnored
     private let postmanImportService: PostmanImportService
     @ObservationIgnored
+    private let curlImportService: CurlImportService
+    @ObservationIgnored
+    private let curlExportService: CurlExportService
+    @ObservationIgnored
     private let requestValidationService: RequestValidationService
 
     init(
@@ -36,6 +40,8 @@ final class AppStore {
         workspaceFileStore: WorkspaceFileStore = WorkspaceFileStore(),
         keychainSecretStore: KeychainSecretStore = KeychainSecretStore(),
         postmanImportService: PostmanImportService = PostmanImportService(),
+        curlImportService: CurlImportService = CurlImportService(),
+        curlExportService: CurlExportService = CurlExportService(),
         requestValidationService: RequestValidationService = RequestValidationService()
     ) {
         self.workspace = workspace
@@ -44,6 +50,8 @@ final class AppStore {
         self.workspaceFileStore = workspaceFileStore
         self.keychainSecretStore = keychainSecretStore
         self.postmanImportService = postmanImportService
+        self.curlImportService = curlImportService
+        self.curlExportService = curlExportService
         self.requestValidationService = requestValidationService
         self.selectedRequestID = workspace.collections.first?.requests.first?.id
         self.selectedCenterPane = selectedRequestID.map(CenterPaneSelection.request)
@@ -208,6 +216,49 @@ final class AppStore {
             executionErrorMessage = nil
         } catch {
             workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func importCurlCommand(_ command: String) {
+        do {
+            var request = try curlImportService.importRequest(from: command)
+            request.id = "req_\(UUID().uuidString)"
+            request.name = nextName(
+                base: request.name,
+                existingNames: workspace.collections.flatMap(\.requests).map(\.name)
+            )
+
+            if workspace.collections.isEmpty {
+                createCollection()
+            }
+
+            guard let collectionID = selectedCollection?.id ?? workspace.collections.first?.id,
+                  workspace.addRequest(request, toCollectionID: collectionID)
+            else {
+                throw RequestLabError.invalidWorkspace("Unable to add imported cURL request")
+            }
+
+            selectedRequestID = request.id
+            selectedCenterPane = .request(request.id)
+            workspaceErrorMessage = nil
+            clearExecutionState()
+        } catch {
+            workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func curlCommandForSelectedRequest() -> String? {
+        guard let selectedRequest else {
+            workspaceErrorMessage = "Select a request before copying cURL."
+            return nil
+        }
+
+        do {
+            workspaceErrorMessage = nil
+            return try curlExportService.export(request: selectedRequest)
+        } catch {
+            workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return nil
         }
     }
 
