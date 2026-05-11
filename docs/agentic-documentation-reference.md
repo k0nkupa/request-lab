@@ -173,7 +173,6 @@ These gaps exist in the current documentation set:
 - No standalone architecture reference beyond `README.md` and design specs.
 - No standalone workspace format reference.
 - No public contributor guide beyond `AGENTS.md`.
-- No license file yet, despite the open-source intent described in `README.md`.
 - No notarization runbook for public macOS distribution.
 
 Do not fill these gaps opportunistically inside unrelated changes. Create or update the right document when the work actually needs it.
