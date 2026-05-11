@@ -45,6 +45,7 @@ struct CommandPaletteView: View {
             TextField("Search commands", text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .focused($isSearchFocused)
+                .accessibilityLabel("Search commands")
 
             Divider()
 
@@ -73,6 +74,7 @@ struct CommandPaletteView: View {
                             }
                             .buttonStyle(.plain)
                             .disabled(!command.isEnabled)
+                            .accessibilityLabel(command.title)
                         }
                     }
                 }

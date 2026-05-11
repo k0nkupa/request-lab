@@ -38,7 +38,7 @@ struct ContentView: View {
                     createItemPopover
                 }
 
-                ToolbarIconButton("Import Postman JSON", systemImage: "square.and.arrow.down") {
+                ToolbarIconButton("Import and export", systemImage: "square.and.arrow.down") {
                     importPopover
                 }
 
@@ -420,6 +420,7 @@ private struct CurlImportSheet: View {
             TextEditor(text: $command)
                 .font(.system(.body, design: .monospaced))
                 .scrollContentBackground(.hidden)
+                .accessibilityLabel("cURL command")
                 .frame(width: 620, height: 220)
                 .padding(8)
                 .background(RequestLabTheme.elevatedSurface)

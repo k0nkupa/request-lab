@@ -73,11 +73,11 @@ struct InspectorView: View {
                 .foregroundStyle(tint)
                 .symbolRenderingMode(.hierarchical)
 
+            Divider()
+
             content()
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .requestLabSurface(tint: tint)
     }
 
     private var detailsSection: some View {
@@ -205,10 +205,8 @@ struct InspectorView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(0.45))
-        )
+        .background(RequestLabTheme.elevatedSurface.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func displayValue(for row: EffectiveVariableRow) -> String {

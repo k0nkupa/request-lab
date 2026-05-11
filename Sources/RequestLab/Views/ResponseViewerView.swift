@@ -82,9 +82,11 @@ struct ResponseViewerView: View {
         Text(value)
             .font(.caption.weight(.semibold))
             .lineLimit(1)
+            .truncationMode(.middle)
             .foregroundStyle(RequestLabTheme.badgeForeground(for: color))
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
+            .frame(maxWidth: 240)
             .background(
                 Capsule(style: .continuous)
                     .fill(RequestLabTheme.softFill(color))
