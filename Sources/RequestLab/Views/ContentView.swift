@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var isDeleteSelectedRequestConfirmationPresented = false
     @State private var isCurlImportPresented = false
     @State private var curlImportText = ""
+    @State private var isCommandPalettePresented = false
 
     var body: some View {
         NavigationSplitView {
@@ -40,6 +41,11 @@ struct ContentView: View {
                 ToolbarIconButton("Import Postman JSON", systemImage: "square.and.arrow.down") {
                     importPopover
                 }
+
+                ToolbarIconButton("Command palette", systemImage: "command") {
+                    isCommandPalettePresented = true
+                }
+                .keyboardShortcut("k", modifiers: .command)
 
                 ToolbarIconButton("Send request", systemImage: "paperplane") {
                     Task {
@@ -130,6 +136,9 @@ struct ContentView: View {
                     isCurlImportPresented = false
                 }
             )
+        }
+        .sheet(isPresented: $isCommandPalettePresented) {
+            CommandPaletteView(commands: commandPaletteCommands)
         }
     }
 
@@ -224,6 +233,85 @@ struct ContentView: View {
         .frame(width: 220, alignment: .leading)
     }
 
+    private var commandPaletteCommands: [CommandPaletteCommand] {
+        [
+            CommandPaletteCommand(id: "open-workspace", title: "Open Workspace", systemImage: "folder") {
+                openWorkspacePanel()
+            },
+            CommandPaletteCommand(id: "save-workspace", title: "Save Workspace", systemImage: "square.and.arrow.down") {
+                if store.workspaceURL == nil {
+                    saveWorkspacePanel()
+                } else {
+                    store.saveWorkspace()
+                }
+            },
+            CommandPaletteCommand(id: "save-workspace-as", title: "Save Workspace As", systemImage: "square.and.arrow.down.on.square") {
+                saveWorkspacePanel()
+            },
+            CommandPaletteCommand(id: "import-postman-collection", title: "Import Postman Collection", systemImage: "square.and.arrow.down") {
+                importPostmanCollectionPanel()
+            },
+            CommandPaletteCommand(id: "import-postman-environment", title: "Import Postman Environment", systemImage: "server.rack") {
+                importPostmanEnvironmentPanel()
+            },
+            CommandPaletteCommand(id: "import-curl", title: "Import cURL Command", systemImage: "terminal") {
+                isCurlImportPresented = true
+            },
+            CommandPaletteCommand(id: "new-request", title: "New Request", systemImage: "doc.badge.plus") {
+                store.createRequest()
+            },
+            CommandPaletteCommand(id: "new-graphql-request", title: "New GraphQL Request", systemImage: "curlybraces") {
+                store.createRequest(kind: .graphQL)
+            },
+            CommandPaletteCommand(id: "new-collection", title: "New Collection", systemImage: "folder.badge.plus") {
+                store.createCollection()
+            },
+            CommandPaletteCommand(id: "new-environment", title: "New Environment", systemImage: "server.rack") {
+                store.createEnvironment()
+            },
+            CommandPaletteCommand(
+                id: "send-request",
+                title: "Send Request",
+                systemImage: "paperplane",
+                isEnabled: store.selectedRequest != nil && !store.isSending
+            ) {
+                Task {
+                    await store.sendSelectedRequest()
+                }
+            },
+            CommandPaletteCommand(id: "toggle-inspector", title: "Toggle Inspector", systemImage: "sidebar.right") {
+                store.isInspectorVisible.toggle()
+            },
+            CommandPaletteCommand(id: "search-requests", title: "Search Requests", systemImage: "magnifyingglass") {
+                isCommandPalettePresented = false
+            },
+            CommandPaletteCommand(
+                id: "copy-response-body",
+                title: "Copy Response Body",
+                systemImage: "doc.on.doc",
+                isEnabled: store.latestResponse != nil
+            ) {
+                copyToPasteboard(store.latestResponse?.body ?? "")
+            },
+            CommandPaletteCommand(
+                id: "copy-response-headers",
+                title: "Copy Response Headers",
+                systemImage: "list.bullet.rectangle",
+                isEnabled: store.latestResponse != nil
+            ) {
+                copyToPasteboard(formattedHeaders(store.latestResponse?.headers ?? [:]))
+            },
+            CommandPaletteCommand(
+                id: "copy-curl",
+                title: "Copy as cURL",
+                systemImage: "terminal",
+                isEnabled: store.selectedRequest != nil
+            ) {
+                copySelectedRequestAsCurl()
+            }
+        ]
+    }
+
     @ViewBuilder
     private var centerWorkspace: some View {
         switch store.selectedCenterPane {
@@ -280,8 +368,19 @@ struct ContentView: View {
             return
         }
 
+        copyToPasteboard(command)
+    }
+
+    private func copyToPasteboard(_ value: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(command, forType: .string)
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
+    private func formattedHeaders(_ headers: [String: String]) -> String {
+        headers
+            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+            .map { "\($0.key): \($0.value)" }
+            .joined(separator: "\n")
     }
 
     private func openJSONPanel(prompt: String, onSelect: (URL) -> Void) {
