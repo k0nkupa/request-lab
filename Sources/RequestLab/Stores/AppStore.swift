@@ -145,6 +145,21 @@ final class AppStore {
         return workspace.request(id: selectedHistoryEntry.requestId)
     }
 
+    var unresolvedVariableReferences: [UnresolvedVariableReference] {
+        guard let selectedRequest else {
+            return []
+        }
+
+        return VariableResolver().unresolvedVariables(
+            in: selectedRequest,
+            environment: effectiveEnvironmentWithSecrets()
+        )
+    }
+
+    var unresolvedVariableNames: Set<String> {
+        Set(unresolvedVariableReferences.map(\.name))
+    }
+
     var workspaceLocationTitle: String {
         workspaceURL?.lastPathComponent ?? "Unsaved workspace"
     }

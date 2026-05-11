@@ -4,6 +4,7 @@ struct KeyValueTableEditor: View {
     let title: String
     let emptyTitle: String
     let emptyDescription: String
+    var unresolvedNames: Set<String> = []
     @Binding var values: [String: String]
     @State private var rows: [KeyValueDraftRow] = []
 
@@ -78,7 +79,7 @@ struct KeyValueTableEditor: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(minWidth: 120, idealWidth: 180, maxWidth: 240)
 
-            VariableTokenTextField("Value", text: valueBinding(for: row))
+            VariableTokenTextField("Value", text: valueBinding(for: row), unresolvedNames: unresolvedNames)
 
             Button(role: .destructive) {
                 deleteRow(id: row.wrappedValue.id)

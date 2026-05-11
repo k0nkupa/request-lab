@@ -33,6 +33,10 @@ struct RequestEditorView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 12)
 
+            unresolvedVariablesWarning
+                .padding(.horizontal)
+                .padding(.bottom, 12)
+
             Divider()
 
             requestTabPanel
@@ -68,7 +72,7 @@ struct RequestEditorView: View {
             .labelsHidden()
             .frame(width: 110)
 
-            VariableTokenTextField("Request URL", text: requestURLBinding)
+            VariableTokenTextField("Request URL", text: requestURLBinding, unresolvedNames: store.unresolvedVariableNames)
 
             Button("Send", systemImage: "paperplane.fill") {
                 Task {
@@ -78,6 +82,43 @@ struct RequestEditorView: View {
             .buttonStyle(.borderedProminent)
             .tint(RequestLabTheme.primaryAction)
             .disabled(request == nil || store.isSending)
+        }
+    }
+
+    @ViewBuilder
+    private var unresolvedVariablesWarning: some View {
+        let references = store.unresolvedVariableReferences
+
+        if !references.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Missing variables before send", systemImage: "exclamationmark.triangle")
+                    .font(.headline)
+                    .foregroundStyle(RequestLabTheme.warning)
+
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 170), alignment: .leading)],
+                    alignment: .leading,
+                    spacing: 6
+                ) {
+                    ForEach(references) { reference in
+                        Text("\(reference.name) - \(reference.location)")
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule(style: .continuous)
+                                    .fill(RequestLabTheme.softFill(RequestLabTheme.warning))
+                            )
+                            .overlay {
+                                Capsule(style: .continuous)
+                                    .stroke(RequestLabTheme.softStroke(RequestLabTheme.warning), lineWidth: 1)
+                            }
+                    }
+                }
+            }
+            .padding(12)
+            .requestLabSurface(tint: RequestLabTheme.warning)
         }
     }
 
@@ -113,6 +154,7 @@ struct RequestEditorView: View {
                 title: "Query parameters",
                 emptyTitle: "No query parameters",
                 emptyDescription: "Add a key and value to append query parameters to this request.",
+                unresolvedNames: store.unresolvedVariableNames,
                 values: binding(
                     get: { request?.params ?? [:] },
                     set: { params in
@@ -125,6 +167,7 @@ struct RequestEditorView: View {
                 title: "Headers",
                 emptyTitle: "No headers",
                 emptyDescription: "Add request headers such as Accept, Content-Type, or X-Trace.",
+                unresolvedNames: store.unresolvedVariableNames,
                 values: binding(
                     get: { request?.headers ?? [:] },
                     set: { headers in
@@ -244,6 +287,7 @@ struct RequestEditorView: View {
                     title: "Form fields",
                     emptyTitle: "No form fields",
                     emptyDescription: "Add form fields to send an application/x-www-form-urlencoded body.",
+                    unresolvedNames: store.unresolvedVariableNames,
                     values: formBodyBinding
                 )
             } else {

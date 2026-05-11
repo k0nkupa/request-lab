@@ -92,9 +92,24 @@ struct EnvironmentEditorView: View {
                         description: Text("Add a key and value for this environment.")
                     )
                 } else {
+                    let duplicateNames = duplicateVariableNames(in: environment)
+
+                    if !duplicateNames.isEmpty {
+                        Label(
+                            "Duplicate variable names: \(duplicateNames.sorted().joined(separator: ", "))",
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(RequestLabTheme.warning)
+                    }
+
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(environment.variables) { variable in
-                            variableRow(environmentID: environment.id, variable: variable)
+                            variableRow(
+                                environmentID: environment.id,
+                                variable: variable,
+                                hasDuplicateName: duplicateNames.contains(variable.name)
+                            )
                         }
                     }
                 }
@@ -104,44 +119,70 @@ struct EnvironmentEditorView: View {
         }
     }
 
-    private func variableRow(environmentID: String, variable: APIVariable) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: variable.isSecret ? "key.horizontal.fill" : "textformat")
-                .foregroundStyle(variable.isSecret ? RequestLabTheme.warning : RequestLabTheme.environment)
-                .symbolRenderingMode(.hierarchical)
-                .frame(width: 18)
+    private func variableRow(environmentID: String, variable: APIVariable, hasDuplicateName: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: variable.isSecret ? "key.horizontal.fill" : "textformat")
+                    .foregroundStyle(variable.isSecret ? RequestLabTheme.warning : RequestLabTheme.environment)
+                    .symbolRenderingMode(.hierarchical)
+                    .frame(width: 18)
 
-            TextField(
-                "Key",
-                text: variableNameBinding(environmentID: environmentID, variableID: variable.id)
-            )
-            .textFieldStyle(.roundedBorder)
-            .frame(minWidth: 160, idealWidth: 220, maxWidth: 280)
+                TextField(
+                    "Key",
+                    text: variableNameBinding(environmentID: environmentID, variableID: variable.id)
+                )
+                .textFieldStyle(.roundedBorder)
+                .frame(minWidth: 160, idealWidth: 220, maxWidth: 280)
+
+                if variable.isSecret {
+                    SecureField(
+                        "Keychain value",
+                        text: secretBinding(environmentID: environmentID, variableID: variable.id)
+                    )
+                    .textFieldStyle(.roundedBorder)
+                } else {
+                    TextField(
+                        "Value",
+                        text: variableBinding(environmentID: environmentID, variableID: variable.id)
+                    )
+                    .textFieldStyle(.roundedBorder)
+                }
+
+                Button(role: .destructive) {
+                    store.deleteEnvironmentVariable(environmentID: environmentID, variableID: variable.id)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help("Delete variable")
+            }
 
             if variable.isSecret {
-                SecureField(
-                    "Stored in Keychain",
-                    text: secretBinding(environmentID: environmentID, variableID: variable.id)
-                )
-                .textFieldStyle(.roundedBorder)
-            } else {
-                TextField(
-                    "Value",
-                    text: variableBinding(environmentID: environmentID, variableID: variable.id)
-                )
-                .textFieldStyle(.roundedBorder)
+                Text("Secret values are stored in macOS Keychain and are not written to shared YAML.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            Button(role: .destructive) {
-                store.deleteEnvironmentVariable(environmentID: environmentID, variableID: variable.id)
-            } label: {
-                Image(systemName: "trash")
+            if hasDuplicateName {
+                Label("This name is duplicated in the selected environment.", systemImage: "exclamationmark.triangle")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(RequestLabTheme.warning)
             }
-            .buttonStyle(.borderless)
-            .help("Delete variable")
         }
         .padding(10)
         .requestLabSurface(tint: variable.isSecret ? RequestLabTheme.warning : RequestLabTheme.environment)
+    }
+
+    private func duplicateVariableNames(in environment: APIEnvironment) -> Set<String> {
+        let names = environment.variables
+            .map(\.name)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let groupedNames = Dictionary(grouping: names, by: { $0 })
+
+        return Set(groupedNames.compactMap { name, values in
+            values.count > 1 ? name : nil
+        })
     }
 
     private func environmentNameBinding(environmentID: String) -> Binding<String> {
