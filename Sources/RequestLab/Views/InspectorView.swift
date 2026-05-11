@@ -154,6 +154,8 @@ struct InspectorView: View {
                 LabeledContent("URL", value: response.url)
                 LabeledContent("Headers", value: "\(response.headers.count)")
                 LabeledContent("Body", value: response.body.isEmpty ? "Empty" : "Present")
+                LabeledContent("Size", value: formatByteCount(response.bodySizeBytes))
+                LabeledContent("Content Type", value: response.contentType ?? "Unknown")
             } else if let errorMessage {
                 ContentUnavailableView(
                     "Request failed",
@@ -168,6 +170,12 @@ struct InspectorView: View {
                 )
             }
         }
+    }
+
+    private func formatByteCount(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 
     private func variableRow(_ row: EffectiveVariableRow) -> some View {

@@ -4,7 +4,6 @@ import RequestLabCore
 struct RequestEditorView: View {
     @Bindable var store: AppStore
     @State private var selectedTab = RequestEditorTab.params
-    @State private var selectedResponseTab = ResponseTab.body
     private let jsonFormatter = JSONFormattingService()
 
     private var request: APIRequest? {
@@ -296,25 +295,7 @@ struct RequestEditorView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let response = store.latestResponse {
-                TabView(selection: $selectedResponseTab) {
-                    ScrollView {
-                        Text(responseBodyText(response.body))
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .tabItem { Text("Body") }
-                    .tag(ResponseTab.body)
-
-                    ScrollView {
-                        Text(Self.formatKeyValues(response.headers))
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .tabItem { Text("Headers") }
-                    .tag(ResponseTab.headers)
-                }
+                ResponseViewerView(response: response)
             } else {
                 ContentUnavailableView(
                     "No response yet",
@@ -544,10 +525,6 @@ struct RequestEditorView: View {
         )
     }
 
-    private func responseBodyText(_ body: String) -> String {
-        body.isEmpty ? "Empty response body" : jsonFormatter.prettyPrintedIfJSON(body)
-    }
-
     private func formatJSONBody() {
         do {
             let formatted = try jsonFormatter.prettyPrinted(bodyTextBinding.wrappedValue)
@@ -595,11 +572,6 @@ private enum RequestEditorTab {
     case auth
     case body
     case graphQL
-}
-
-private enum ResponseTab {
-    case body
-    case headers
 }
 
 private enum RequestBodyEditorType: CaseIterable {

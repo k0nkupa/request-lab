@@ -54,6 +54,8 @@ struct RequestExecutionServiceTests {
         #expect(result.url == "https://api.example.test/orders?limit=50")
         #expect(result.headers["Content-Type"] == "application/json")
         #expect(result.body == #"{"ok":true}"#)
+        #expect(result.bodySizeBytes == 11)
+        #expect(result.contentType == "application/json")
     }
 
     @Test("returns non-2xx responses instead of throwing")
@@ -85,6 +87,39 @@ struct RequestExecutionServiceTests {
 
         #expect(result.statusCode == 404)
         #expect(result.body == #"{"error":"missing"}"#)
+    }
+
+    @Test("captures response size and content type metadata")
+    func capturesResponseMetadata() async throws {
+        let responseBody = "résumé"
+        MockURLProtocol.handler = { request in
+            let url = try #require(request.url)
+            let response = try #require(
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: "HTTP/1.1",
+                    headerFields: ["content-type": "text/plain; charset=utf-8"]
+                )
+            )
+
+            return (response, responseBody.data(using: .utf8) ?? Data())
+        }
+        defer { MockURLProtocol.handler = nil }
+
+        let service = RequestExecutionService(session: URLSession.mocked)
+        let request = APIRequest(
+            id: "req_text",
+            name: "Text",
+            method: .get,
+            url: "https://api.example.test/text"
+        )
+
+        let result = try await service.execute(request, environment: nil)
+
+        #expect(result.body == responseBody)
+        #expect(result.bodySizeBytes == 8)
+        #expect(result.contentType == "text/plain; charset=utf-8")
     }
 
     @Test("executes a GraphQL request")
