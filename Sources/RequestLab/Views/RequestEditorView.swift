@@ -110,9 +110,10 @@ struct RequestEditorView: View {
     private var requestTabContent: some View {
         switch selectedTab {
         case .params:
-            keyValueEditor(
+            KeyValueTableEditor(
                 title: "Query parameters",
-                placeholder: "limit=50\nstatus=open",
+                emptyTitle: "No query parameters",
+                emptyDescription: "Add a key and value to append query parameters to this request.",
                 values: binding(
                     get: { request?.params ?? [:] },
                     set: { params in
@@ -121,9 +122,10 @@ struct RequestEditorView: View {
                 )
             )
         case .headers:
-            keyValueEditor(
+            KeyValueTableEditor(
                 title: "Headers",
-                placeholder: "Accept=application/json\nX-Trace={{traceId}}",
+                emptyTitle: "No headers",
+                emptyDescription: "Add request headers such as Accept, Content-Type, or X-Trace.",
                 values: binding(
                     get: { request?.headers ?? [:] },
                     set: { headers in
@@ -239,9 +241,10 @@ struct RequestEditorView: View {
             } else if bodyTypeBinding.wrappedValue == .none {
                 ContentUnavailableView("No request body", systemImage: "doc")
             } else if bodyTypeBinding.wrappedValue == .form {
-                keyValueEditor(
+                KeyValueTableEditor(
                     title: "Form fields",
-                    placeholder: "email=tony@example.test\nscope=orders",
+                    emptyTitle: "No form fields",
+                    emptyDescription: "Add form fields to send an application/x-www-form-urlencoded body.",
                     values: formBodyBinding
                 )
             } else {
@@ -327,33 +330,6 @@ struct RequestEditorView: View {
             cornerRadius: 12
         )
         .frame(minHeight: 220)
-    }
-
-    private func keyValueEditor(
-        title: String,
-        placeholder: String,
-        values: Binding<[String: String]>
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-
-            TextEditor(text: keyValueTextBinding(values))
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 160)
-                .background(RequestLabTheme.elevatedSurface)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(RequestLabTheme.editorBorder, lineWidth: 1)
-                }
-
-            Text(placeholder)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-        }
     }
 
     private func methodBadge(_ method: HTTPMethod) -> some View {
@@ -568,13 +544,6 @@ struct RequestEditorView: View {
         )
     }
 
-    private func keyValueTextBinding(_ values: Binding<[String: String]>) -> Binding<String> {
-        Binding(
-            get: { Self.formatKeyValues(values.wrappedValue) },
-            set: { values.wrappedValue = Self.parseKeyValues($0) }
-        )
-    }
-
     private func responseBodyText(_ body: String) -> String {
         body.isEmpty ? "Empty response body" : jsonFormatter.prettyPrintedIfJSON(body)
     }
@@ -618,20 +587,6 @@ struct RequestEditorView: View {
             .joined(separator: "\n")
     }
 
-    private static func parseKeyValues(_ text: String) -> [String: String] {
-        text
-            .split(whereSeparator: \.isNewline)
-            .reduce(into: [:]) { values, line in
-                let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-                guard let key = parts.first?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !key.isEmpty
-                else {
-                    return
-                }
-
-                values[key] = parts.dropFirst().first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            }
-    }
 }
 
 private enum RequestEditorTab {
