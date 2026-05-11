@@ -73,6 +73,92 @@ public extension APIWorkspace {
         return false
     }
 
+    mutating func renameRequest(id requestID: String, to name: String) -> Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            return false
+        }
+
+        return updateRequest(id: requestID) { request in
+            request.name = trimmedName
+        }
+    }
+
+    mutating func duplicateRequest(id requestID: String, newID: String, name: String) -> APIRequest? {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty,
+              collectionID(containingRequestID: newID) == nil
+        else {
+            return nil
+        }
+
+        for collectionIndex in collections.indices {
+            guard let requestIndex = collections[collectionIndex].requests.firstIndex(where: { $0.id == requestID }) else {
+                continue
+            }
+
+            var duplicatedRequest = collections[collectionIndex].requests[requestIndex]
+            duplicatedRequest.id = newID
+            duplicatedRequest.name = trimmedName
+            collections[collectionIndex].requests.insert(duplicatedRequest, at: requestIndex + 1)
+            return duplicatedRequest
+        }
+
+        return nil
+    }
+
+    mutating func moveRequest(id requestID: String, toCollectionID collectionID: String) -> Bool {
+        var sourceCollectionIndex: Array<APICollection>.Index?
+        var sourceRequestIndex: Array<APIRequest>.Index?
+
+        for collectionIndex in collections.indices {
+            guard let requestIndex = collections[collectionIndex].requests.firstIndex(where: { $0.id == requestID }) else {
+                continue
+            }
+
+            sourceCollectionIndex = collectionIndex
+            sourceRequestIndex = requestIndex
+            break
+        }
+
+        guard let sourceCollectionIndex,
+              let sourceRequestIndex,
+              let destinationCollectionIndex = collections.firstIndex(where: { $0.id == collectionID })
+        else {
+            return false
+        }
+
+        guard sourceCollectionIndex != destinationCollectionIndex else {
+            return true
+        }
+
+        let request = collections[sourceCollectionIndex].requests.remove(at: sourceRequestIndex)
+        collections[destinationCollectionIndex].requests.append(request)
+        return true
+    }
+
+    mutating func reorderRequest(id requestID: String, toIndex destinationIndex: Int) -> Bool {
+        for collectionIndex in collections.indices {
+            guard let requestIndex = collections[collectionIndex].requests.firstIndex(where: { $0.id == requestID }) else {
+                continue
+            }
+
+            guard collections[collectionIndex].requests.indices.contains(destinationIndex) else {
+                return false
+            }
+
+            guard requestIndex != destinationIndex else {
+                return true
+            }
+
+            let request = collections[collectionIndex].requests.remove(at: requestIndex)
+            collections[collectionIndex].requests.insert(request, at: destinationIndex)
+            return true
+        }
+
+        return false
+    }
+
     mutating func deleteRequest(id requestID: String) -> Bool {
         for collectionIndex in collections.indices {
             guard let requestIndex = collections[collectionIndex].requests.firstIndex(where: { $0.id == requestID }) else {

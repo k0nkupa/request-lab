@@ -7,7 +7,11 @@ struct SidebarView: View {
     @State private var renamingCollectionID: String?
     @State private var collectionNameDraft = ""
     @FocusState private var isCollectionNameFieldFocused: Bool
+    @State private var renamingRequestID: String?
+    @State private var requestNameDraft = ""
+    @FocusState private var isRequestNameFieldFocused: Bool
     @State private var selectedColorCollectionID: String?
+    @State private var pendingDelete: SidebarDeleteTarget?
 
     var body: some View {
         List(selection: selection) {
@@ -37,7 +41,13 @@ struct SidebarView: View {
                                     }
 
                                     Button("Delete Environment", role: .destructive) {
-                                        store.deleteCollectionEnvironment(id: environment.id, fromCollectionID: collection.id)
+                                        confirmDelete(
+                                            .collectionEnvironment(
+                                                id: environment.id,
+                                                collectionID: collection.id,
+                                                name: environment.name
+                                            )
+                                        )
                                     }
                                 }
                         }
@@ -48,8 +58,39 @@ struct SidebarView: View {
                             requestLabel(request, isSelected: rowSelection == store.selectedCenterPane)
                                 .tag(rowSelection)
                                 .contextMenu {
+                                    Button("Rename Request") {
+                                        startRenamingRequest(request)
+                                    }
+
+                                    Button("Duplicate Request") {
+                                        store.duplicateRequest(id: request.id)
+                                    }
+
+                                    Menu("Move To Collection") {
+                                        ForEach(store.workspace.collections) { destinationCollection in
+                                            Button(destinationCollection.name) {
+                                                store.moveRequest(id: request.id, toCollectionID: destinationCollection.id)
+                                            }
+                                            .disabled(destinationCollection.id == collection.id)
+                                        }
+                                    }
+
+                                    Divider()
+
+                                    Button("Move Up") {
+                                        moveRequestUp(request, in: collection)
+                                    }
+                                    .disabled(!canMoveRequestUp(request, in: collection))
+
+                                    Button("Move Down") {
+                                        moveRequestDown(request, in: collection)
+                                    }
+                                    .disabled(!canMoveRequestDown(request, in: collection))
+
+                                    Divider()
+
                                     Button("Delete Request", role: .destructive) {
-                                        store.deleteRequest(id: request.id)
+                                        confirmDelete(.request(id: request.id, name: request.name))
                                     }
                                 }
                         }
@@ -91,7 +132,7 @@ struct SidebarView: View {
                         Divider()
 
                         Button("Delete Collection", role: .destructive) {
-                            store.deleteCollection(id: collection.id)
+                            confirmDelete(.collection(id: collection.id, name: collection.name))
                         }
                     }
                 }
@@ -113,7 +154,7 @@ struct SidebarView: View {
                             }
 
                             Button("Delete Environment", role: .destructive) {
-                                store.deleteEnvironment(id: environment.id)
+                                confirmDelete(.globalEnvironment(id: environment.id, name: environment.name))
                             }
                         }
                 }
@@ -138,6 +179,22 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .searchable(text: $sidebarSearchText, placement: .sidebar, prompt: "Search")
         .navigationTitle(store.editorTitle)
+        .confirmationDialog(
+            pendingDelete?.title ?? "Delete Item",
+            isPresented: isDeleteConfirmationPresented,
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { target in
+            Button(target.actionTitle, role: .destructive) {
+                performDelete(target)
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingDelete = nil
+            }
+        } message: { target in
+            Text(target.message)
+        }
     }
 
     private var normalizedSearchText: String {
@@ -246,6 +303,35 @@ struct SidebarView: View {
         }
     }
 
+    @ViewBuilder
+    private func requestLabel(_ request: APIRequest, isSelected: Bool) -> some View {
+        if renamingRequestID == request.id {
+            TextField("Request name", text: $requestNameDraft)
+                .textFieldStyle(.plain)
+                .focused($isRequestNameFieldFocused)
+                .onSubmit {
+                    commitRequestRename()
+                }
+                .onExitCommand {
+                    cancelRequestRename()
+                }
+                .onChange(of: isRequestNameFieldFocused) { _, isFocused in
+                    if !isFocused, renamingRequestID == request.id {
+                        cancelRequestRename()
+                    }
+                }
+        } else {
+            Label {
+                Text(request.name)
+                    .fontWeight(isSelected ? .semibold : .regular)
+            } icon: {
+                Image(systemName: request.kind == .graphQL ? "curlybraces" : "doc.text")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(request.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
+            }
+        }
+    }
+
     private func collectionColorPicker(forCollectionID collectionID: String) -> some View {
         let selectedColor = store.workspace.collections.first { $0.id == collectionID }?.color
 
@@ -321,17 +407,6 @@ struct SidebarView: View {
         .contentShape(Rectangle())
     }
 
-    private func requestLabel(_ request: APIRequest, isSelected: Bool) -> some View {
-        Label {
-            Text(request.name)
-                .fontWeight(isSelected ? .semibold : .regular)
-        } icon: {
-            Image(systemName: request.kind == .graphQL ? "curlybraces" : "doc.text")
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(request.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
-        }
-    }
-
     private func historyLabel(_ entry: APIHistoryEntry) -> some View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
@@ -391,6 +466,8 @@ struct SidebarView: View {
             return
         }
 
+        cancelRequestRename()
+
         if renamingCollectionID != nil {
             cancelCollectionRename()
         }
@@ -421,10 +498,154 @@ struct SidebarView: View {
         isCollectionNameFieldFocused = false
     }
 
+    private func startRenamingRequest(_ request: APIRequest) {
+        if renamingRequestID == request.id {
+            isRequestNameFieldFocused = true
+            return
+        }
+
+        cancelCollectionRename()
+
+        if renamingRequestID != nil {
+            cancelRequestRename()
+        }
+
+        renamingRequestID = request.id
+        requestNameDraft = request.name
+        isRequestNameFieldFocused = true
+    }
+
+    private func commitRequestRename() {
+        guard let requestID = renamingRequestID else {
+            return
+        }
+
+        let trimmedName = requestNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            store.renameRequest(id: requestID, to: trimmedName)
+        }
+
+        renamingRequestID = nil
+        requestNameDraft = ""
+        isRequestNameFieldFocused = false
+    }
+
+    private func cancelRequestRename() {
+        renamingRequestID = nil
+        requestNameDraft = ""
+        isRequestNameFieldFocused = false
+    }
+
+    private func requestIndex(_ request: APIRequest, in collection: APICollection) -> Int? {
+        collection.requests.firstIndex { $0.id == request.id }
+    }
+
+    private func canMoveRequestUp(_ request: APIRequest, in collection: APICollection) -> Bool {
+        guard let index = requestIndex(request, in: collection) else {
+            return false
+        }
+
+        return index > 0
+    }
+
+    private func canMoveRequestDown(_ request: APIRequest, in collection: APICollection) -> Bool {
+        guard let index = requestIndex(request, in: collection) else {
+            return false
+        }
+
+        return index < collection.requests.count - 1
+    }
+
+    private func moveRequestUp(_ request: APIRequest, in collection: APICollection) {
+        guard let index = requestIndex(request, in: collection), index > 0 else {
+            return
+        }
+
+        store.reorderRequest(id: request.id, toIndex: index - 1)
+    }
+
+    private func moveRequestDown(_ request: APIRequest, in collection: APICollection) {
+        guard let index = requestIndex(request, in: collection), index < collection.requests.count - 1 else {
+            return
+        }
+
+        store.reorderRequest(id: request.id, toIndex: index + 1)
+    }
+
+    private func confirmDelete(_ target: SidebarDeleteTarget) {
+        pendingDelete = target
+    }
+
+    private func performDelete(_ target: SidebarDeleteTarget) {
+        switch target {
+        case .request(let id, _):
+            store.deleteRequest(id: id)
+        case .collection(let id, _):
+            store.deleteCollection(id: id)
+        case .globalEnvironment(let id, _):
+            store.deleteEnvironment(id: id)
+        case .collectionEnvironment(let id, let collectionID, _):
+            store.deleteCollectionEnvironment(id: id, fromCollectionID: collectionID)
+        }
+
+        pendingDelete = nil
+    }
+
+    private var isDeleteConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { pendingDelete != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDelete = nil
+                }
+            }
+        )
+    }
+
     private var selection: Binding<CenterPaneSelection?> {
         Binding(
             get: { store.selectedCenterPane },
             set: { store.selectCenterPane($0) }
         )
+    }
+}
+
+private enum SidebarDeleteTarget {
+    case request(id: String, name: String)
+    case collection(id: String, name: String)
+    case globalEnvironment(id: String, name: String)
+    case collectionEnvironment(id: String, collectionID: String, name: String)
+
+    var title: String {
+        switch self {
+        case .request:
+            "Delete Request?"
+        case .collection:
+            "Delete Collection?"
+        case .globalEnvironment, .collectionEnvironment:
+            "Delete Environment?"
+        }
+    }
+
+    var actionTitle: String {
+        switch self {
+        case .request:
+            "Delete Request"
+        case .collection:
+            "Delete Collection"
+        case .globalEnvironment, .collectionEnvironment:
+            "Delete Environment"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .request(_, let name):
+            "Delete \"\(name)\"? This cannot be undone."
+        case .collection(_, let name):
+            "Delete \"\(name)\" and its requests and environments? This cannot be undone."
+        case .globalEnvironment(_, let name), .collectionEnvironment(_, _, let name):
+            "Delete \"\(name)\"? This cannot be undone."
+        }
     }
 }

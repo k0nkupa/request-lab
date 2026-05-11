@@ -262,6 +262,55 @@ final class AppStore {
         clearExecutionState()
     }
 
+    func renameRequest(id requestID: String, to name: String) {
+        guard workspace.renameRequest(id: requestID, to: name) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
+    func duplicateRequest(id requestID: String) {
+        guard let request = workspace.collections
+            .flatMap(\.requests)
+            .first(where: { $0.id == requestID })
+        else {
+            return
+        }
+
+        let duplicateName = nextName(
+            base: "\(request.name) Copy",
+            existingNames: workspace.collections.flatMap(\.requests).map(\.name)
+        )
+        guard let duplicatedRequest = workspace.duplicateRequest(
+            id: requestID,
+            newID: "req_\(UUID().uuidString)",
+            name: duplicateName
+        ) else {
+            return
+        }
+
+        selectedRequestID = duplicatedRequest.id
+        selectedCenterPane = .request(duplicatedRequest.id)
+        clearExecutionState()
+    }
+
+    func moveRequest(id requestID: String, toCollectionID collectionID: String) {
+        guard workspace.moveRequest(id: requestID, toCollectionID: collectionID) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
+    func reorderRequest(id requestID: String, toIndex destinationIndex: Int) {
+        guard workspace.reorderRequest(id: requestID, toIndex: destinationIndex) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
     func deleteSelectedRequest() {
         guard let selectedRequestID,
               workspace.deleteRequest(id: selectedRequestID)

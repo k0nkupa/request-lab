@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Bindable var store: AppStore
+    @State private var isDeleteSelectedRequestConfirmationPresented = false
 
     var body: some View {
         NavigationSplitView {
@@ -47,7 +48,7 @@ struct ContentView: View {
                 .disabled(store.selectedRequest == nil || store.isSending)
 
                 ToolbarIconButton("Delete selected request", systemImage: "trash", role: .destructive) {
-                    store.deleteSelectedRequest()
+                    isDeleteSelectedRequestConfirmationPresented = true
                 }
                 .keyboardShortcut(.delete, modifiers: [])
                 .disabled(store.selectedRequest == nil)
@@ -100,6 +101,19 @@ struct ContentView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(store.workspaceErrorMessage ?? "")
+        }
+        .confirmationDialog(
+            "Delete Request?",
+            isPresented: $isDeleteSelectedRequestConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Request", role: .destructive) {
+                store.deleteSelectedRequest()
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Delete \"\(store.selectedRequest?.name ?? "selected request")\"? This cannot be undone.")
         }
     }
 
