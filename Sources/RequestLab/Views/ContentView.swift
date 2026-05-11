@@ -5,7 +5,8 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Bindable var store: AppStore
-    @State private var isDeleteSelectedRequestConfirmationPresented = false
+    @State private var selectedWorkbenchSection: WorkbenchSection = .requests
+    @State private var pendingDeleteRequestID: String?
     @State private var isCurlImportPresented = false
     @State private var curlImportText = ""
     @State private var isCommandPalettePresented = false
@@ -38,7 +39,7 @@ struct ContentView: View {
             HSplitView {
                 WorkbenchRailView(
                     selectedSection: Binding(
-                        get: { activeWorkbenchSection },
+                        get: { selectedWorkbenchSection },
                         set: { selectWorkbenchSection($0) }
                     ),
                     openCommandPalette: {
@@ -47,7 +48,16 @@ struct ContentView: View {
                 )
                 .frame(width: 54)
 
-                SidebarView(store: store)
+                WorkspaceNavigatorView(
+                    store: store,
+                    selectedSection: Binding(
+                        get: { selectedWorkbenchSection },
+                        set: { selectWorkbenchSection($0) }
+                    ),
+                    confirmDeleteRequest: { requestID in
+                        pendingDeleteRequestID = requestID
+                    }
+                )
                     .frame(minWidth: 230, idealWidth: 270, maxWidth: 330)
 
                 centerWorkspace
@@ -78,16 +88,22 @@ struct ContentView: View {
         }
         .confirmationDialog(
             "Delete Request?",
-            isPresented: $isDeleteSelectedRequestConfirmationPresented,
+            isPresented: isDeleteRequestConfirmationPresented,
             titleVisibility: .visible
         ) {
             Button("Delete Request", role: .destructive) {
-                store.deleteSelectedRequest()
+                if let pendingDeleteRequestID {
+                    store.deleteRequest(id: pendingDeleteRequestID)
+                }
+
+                pendingDeleteRequestID = nil
             }
 
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) {
+                pendingDeleteRequestID = nil
+            }
         } message: {
-            Text("Delete \"\(store.selectedRequest?.name ?? "selected request")\"? This cannot be undone.")
+            Text("Delete \"\(pendingDeleteRequest?.name ?? "selected request")\"? This cannot be undone.")
         }
         .sheet(isPresented: $isCurlImportPresented) {
             CurlImportSheet(
@@ -105,6 +121,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isCommandPalettePresented) {
             CommandPaletteView(commands: commandPaletteCommands)
+        }
+        .onChange(of: store.selectedCenterPane) { _, _ in
+            selectedWorkbenchSection = activeWorkbenchSection
         }
     }
 
@@ -129,7 +148,7 @@ struct ContentView: View {
             .keyboardShortcut("k", modifiers: .command)
 
             ToolbarIconButton("Delete selected request", systemImage: "trash", role: .destructive) {
-                isDeleteSelectedRequestConfirmationPresented = true
+                pendingDeleteRequestID = store.selectedRequest?.id
             }
             .keyboardShortcut(.delete, modifiers: [])
             .disabled(store.selectedRequest == nil)
@@ -159,6 +178,27 @@ struct ContentView: View {
         case .request, .none:
             .requests
         }
+    }
+
+    private var pendingDeleteRequest: APIRequest? {
+        guard let pendingDeleteRequestID else {
+            return nil
+        }
+
+        return store.workspace.collections
+            .flatMap(\.requests)
+            .first { $0.id == pendingDeleteRequestID }
+    }
+
+    private var isDeleteRequestConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteRequestID != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDeleteRequestID = nil
+                }
+            }
+        )
     }
 
     private var environmentMenu: some View {
@@ -358,59 +398,11 @@ struct ContentView: View {
 
     private func selectWorkbenchSection(_ section: WorkbenchSection) {
         switch section {
-        case .requests:
-            selectFirstRequest()
-        case .environments:
-            selectFirstEnvironment()
-        case .history:
-            selectFirstHistoryEntry()
+        case .requests, .environments, .history:
+            selectedWorkbenchSection = section
         case .commands:
             isCommandPalettePresented = true
         }
-    }
-
-    private func selectFirstRequest() {
-        guard let requestID = store.workspace.collections
-            .flatMap(\.requests)
-            .first?
-            .id
-        else {
-            store.createRequest()
-            return
-        }
-
-        store.selectCenterPane(.request(requestID))
-    }
-
-    private func selectFirstEnvironment() {
-        if let environmentID = store.selectedGlobalEnvironmentID,
-           store.workspace.environments.contains(where: { $0.id == environmentID })
-        {
-            store.selectCenterPane(.globalEnvironment(environmentID))
-            return
-        }
-
-        if let environmentID = store.workspace.environments.first?.id {
-            store.selectCenterPane(.globalEnvironment(environmentID))
-            return
-        }
-
-        for collection in store.workspace.collections {
-            if let environmentID = collection.environments.first?.id {
-                store.selectCenterPane(.collectionEnvironment(collectionID: collection.id, environmentID: environmentID))
-                return
-            }
-        }
-
-        store.createEnvironment()
-    }
-
-    private func selectFirstHistoryEntry() {
-        guard let historyID = store.workspace.history.first?.id else {
-            return
-        }
-
-        store.selectCenterPane(.history(historyID))
     }
 
     private func saveWorkspacePanel() {
