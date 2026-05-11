@@ -202,6 +202,8 @@ struct ContentView: View {
         switch store.selectedCenterPane {
         case .globalEnvironment, .collectionEnvironment:
             EnvironmentEditorView(store: store)
+        case .history:
+            HistoryDetailView(store: store)
         case .request, .none:
             RequestEditorView(store: store)
         }

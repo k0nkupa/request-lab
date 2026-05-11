@@ -356,24 +356,79 @@ public struct APIVariable: Codable, Equatable, Sendable, Identifiable {
 public struct APIHistoryEntry: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var requestId: String
+    public var createdAt: Date
+    public var requestName: String?
     public var method: HTTPMethod
     public var url: String
     public var statusCode: Int?
     public var durationMilliseconds: Int?
+    public var responseSizeBytes: Int?
+    public var contentType: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case requestId
+        case createdAt
+        case requestName
+        case method
+        case url
+        case statusCode
+        case durationMilliseconds
+        case responseSizeBytes
+        case contentType
+    }
 
     public init(
         id: String,
         requestId: String,
+        createdAt: Date = Date(),
+        requestName: String? = nil,
         method: HTTPMethod,
         url: String,
         statusCode: Int? = nil,
-        durationMilliseconds: Int? = nil
+        durationMilliseconds: Int? = nil,
+        responseSizeBytes: Int? = nil,
+        contentType: String? = nil
     ) {
         self.id = id
         self.requestId = requestId
+        self.createdAt = createdAt
+        self.requestName = requestName
         self.method = method
         self.url = url
         self.statusCode = statusCode
         self.durationMilliseconds = durationMilliseconds
+        self.responseSizeBytes = responseSizeBytes
+        self.contentType = contentType
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.id = try container.decode(String.self, forKey: .id)
+        self.requestId = try container.decode(String.self, forKey: .requestId)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.requestName = try container.decodeIfPresent(String.self, forKey: .requestName)
+        self.method = try container.decode(HTTPMethod.self, forKey: .method)
+        self.url = try container.decode(String.self, forKey: .url)
+        self.statusCode = try container.decodeIfPresent(Int.self, forKey: .statusCode)
+        self.durationMilliseconds = try container.decodeIfPresent(Int.self, forKey: .durationMilliseconds)
+        self.responseSizeBytes = try container.decodeIfPresent(Int.self, forKey: .responseSizeBytes)
+        self.contentType = try container.decodeIfPresent(String.self, forKey: .contentType)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(id, forKey: .id)
+        try container.encode(requestId, forKey: .requestId)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(requestName, forKey: .requestName)
+        try container.encode(method, forKey: .method)
+        try container.encode(url, forKey: .url)
+        try container.encodeIfPresent(statusCode, forKey: .statusCode)
+        try container.encodeIfPresent(durationMilliseconds, forKey: .durationMilliseconds)
+        try container.encodeIfPresent(responseSizeBytes, forKey: .responseSizeBytes)
+        try container.encodeIfPresent(contentType, forKey: .contentType)
     }
 }

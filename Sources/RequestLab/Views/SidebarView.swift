@@ -171,7 +171,23 @@ struct SidebarView: View {
                     ContentUnavailableView.search
                 } else {
                     ForEach(filteredHistory) { entry in
-                        historyLabel(entry)
+                        let rowSelection = CenterPaneSelection.history(entry.id)
+
+                        historyLabel(entry, isSelected: rowSelection == store.selectedCenterPane)
+                            .tag(rowSelection)
+                            .contextMenu {
+                                Button("Open Request") {
+                                    _ = store.openRequestFromHistory(id: entry.id)
+                                }
+                                .disabled(store.workspace.request(id: entry.requestId) == nil)
+
+                                Button("Re-run") {
+                                    Task {
+                                        await store.rerunHistoryEntry(id: entry.id)
+                                    }
+                                }
+                                .disabled(store.workspace.request(id: entry.requestId) == nil || store.isSending)
+                            }
                     }
                 }
             }
@@ -232,6 +248,9 @@ struct SidebarView: View {
 
         return store.workspace.history.filter { entry in
             matchesSearch(entry.url)
+                || matchesSearch(entry.requestName ?? "")
+                || matchesSearch(entry.method.rawValue)
+                || entry.statusCode.map { matchesSearch("\($0)") } == true
         }
     }
 
@@ -407,11 +426,19 @@ struct SidebarView: View {
         .contentShape(Rectangle())
     }
 
-    private func historyLabel(_ entry: APIHistoryEntry) -> some View {
+    private func historyLabel(_ entry: APIHistoryEntry, isSelected: Bool) -> some View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.url)
+                Text(entry.requestName ?? entry.url)
+                    .fontWeight(isSelected ? .semibold : .regular)
                     .lineLimit(1)
+
+                if entry.requestName != nil {
+                    Text(entry.url)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
 
                 HStack(spacing: 6) {
                     Text(entry.method.rawValue)
@@ -426,6 +453,14 @@ struct SidebarView: View {
                     if let durationMilliseconds = entry.durationMilliseconds {
                         Text("\(durationMilliseconds) ms")
                     }
+
+                    if let responseSizeBytes = entry.responseSizeBytes {
+                        Text(formatByteCount(responseSizeBytes))
+                    }
+
+                    if let timestamp = historyTimestamp(entry.createdAt) {
+                        Text(timestamp)
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -434,8 +469,22 @@ struct SidebarView: View {
         } icon: {
             Image(systemName: "clock")
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isSelected ? RequestLabTheme.selection : .secondary)
         }
+    }
+
+    private func historyTimestamp(_ date: Date) -> String? {
+        guard date.timeIntervalSince1970 > 0 else {
+            return nil
+        }
+
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func formatByteCount(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 
     private func environmentLabel(_ environment: APIEnvironment, isSelected: Bool, isActive: Bool) -> some View {

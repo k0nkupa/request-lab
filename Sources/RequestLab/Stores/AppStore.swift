@@ -113,7 +113,7 @@ final class AppStore {
             workspace.collections
                 .flatMap(\.environments)
                 .first { $0.id == environmentID }
-        case .request, .none:
+        case .request, .history, .none:
             nil
         }
     }
@@ -124,9 +124,25 @@ final class AppStore {
             "Global Environment"
         case .collectionEnvironment:
             "Collection Environment"
-        case .request, .none:
+        case .request, .history, .none:
             "Environment"
         }
+    }
+
+    var selectedHistoryEntry: APIHistoryEntry? {
+        guard case .history(let historyID) = selectedCenterPane else {
+            return nil
+        }
+
+        return workspace.history.first { $0.id == historyID }
+    }
+
+    var selectedHistoryRequest: APIRequest? {
+        guard let selectedHistoryEntry else {
+            return nil
+        }
+
+        return workspace.request(id: selectedHistoryEntry.requestId)
     }
 
     var workspaceLocationTitle: String {
@@ -422,6 +438,8 @@ final class AppStore {
             selectedRequestID = requestID
             selectedCenterPane = selection
             clearExecutionState()
+        case .history:
+            selectedCenterPane = selection
         case .globalEnvironment(let environmentID):
             selectedCenterPane = selection
             selectGlobalEnvironment(id: environmentID)
@@ -614,6 +632,48 @@ final class AppStore {
         isSending = false
     }
 
+    func openRequestFromHistory(id historyID: String) -> Bool {
+        guard let historyEntry = workspace.history.first(where: { $0.id == historyID }),
+              workspace.request(id: historyEntry.requestId) != nil
+        else {
+            return false
+        }
+
+        selectedRequestID = historyEntry.requestId
+        selectedCenterPane = .request(historyEntry.requestId)
+        clearExecutionState()
+        return true
+    }
+
+    func rerunHistoryEntry(id historyID: String) async {
+        guard let historyEntry = workspace.history.first(where: { $0.id == historyID }),
+              let request = workspace.request(id: historyEntry.requestId)
+        else {
+            latestResponse = nil
+            executionErrorMessage = "The original request for this history entry is no longer available."
+            return
+        }
+
+        selectedRequestID = request.id
+        isSending = true
+        executionErrorMessage = nil
+
+        do {
+            try requestValidationService.validateForSend(request)
+            let result = try await executionService.execute(
+                request,
+                environment: effectiveEnvironmentWithSecrets()
+            )
+            latestResponse = result
+            appendHistoryEntry(from: result)
+        } catch {
+            latestResponse = nil
+            executionErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+
+        isSending = false
+    }
+
     private func effectiveEnvironmentWithSecrets() -> APIEnvironment? {
         let globalEnvironment = environmentWithSecrets(selectedGlobalEnvironment)
         let collectionEnvironment = environmentWithSecrets(selectedCollectionEnvironment)
@@ -658,10 +718,13 @@ final class AppStore {
             APIHistoryEntry(
                 id: "hist_\(UUID().uuidString)",
                 requestId: result.requestId,
+                requestName: selectedRequest?.name,
                 method: result.method,
                 url: result.url,
                 statusCode: result.statusCode,
-                durationMilliseconds: result.durationMilliseconds
+                durationMilliseconds: result.durationMilliseconds,
+                responseSizeBytes: result.bodySizeBytes,
+                contentType: result.contentType
             ),
             at: 0
         )
@@ -717,6 +780,7 @@ final class AppStore {
 
 enum CenterPaneSelection: Hashable {
     case request(String)
+    case history(String)
     case globalEnvironment(String)
     case collectionEnvironment(collectionID: String, environmentID: String)
 }

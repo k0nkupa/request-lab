@@ -188,6 +188,12 @@ public extension APIWorkspace {
         }
     }
 
+    func request(id requestID: String) -> APIRequest? {
+        collections
+            .flatMap(\.requests)
+            .first { $0.id == requestID }
+    }
+
     mutating func addCollectionEnvironment(_ environment: APIEnvironment, toCollectionID collectionID: String) -> Bool {
         guard let collectionIndex = collections.firstIndex(where: { $0.id == collectionID }) else {
             return false

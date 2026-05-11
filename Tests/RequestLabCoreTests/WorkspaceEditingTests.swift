@@ -132,6 +132,26 @@ struct WorkspaceEditingTests {
         #expect(workspace.collections.first?.requests.isEmpty == true)
     }
 
+    @Test("finds requests by id")
+    func findsRequestsByID() {
+        let request = APIRequest(
+            id: "req_orders",
+            name: "Orders",
+            method: .get,
+            url: "https://api.example.test/orders"
+        )
+        let workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(id: "col", name: "Collection", requests: [request])
+            ]
+        )
+
+        #expect(workspace.request(id: "req_orders") == request)
+        #expect(workspace.request(id: "req_missing") == nil)
+    }
+
     @Test("renames requests by id")
     func renamesRequestsByID() {
         var workspace = APIWorkspace(
