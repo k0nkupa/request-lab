@@ -29,7 +29,7 @@ struct RequestWorkbenchView: View {
                 builderPanel
                     .frame(minHeight: 300)
 
-                responsePanel
+                ResponseConsoleView(store: store)
                     .frame(minHeight: 240)
             }
         }
@@ -292,64 +292,6 @@ struct RequestWorkbenchView: View {
 
             Spacer()
         }
-    }
-
-    private var responsePanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Response Console", systemImage: "terminal")
-                    .font(.headline)
-                    .symbolRenderingMode(.hierarchical)
-
-                Spacer()
-
-                if let response = store.latestResponse {
-                    responseStatusBadge(response)
-                }
-            }
-
-            if store.isSending {
-                ProgressView("Sending request...")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let errorMessage = store.executionErrorMessage {
-                ContentUnavailableView(
-                    "Request failed",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(errorMessage)
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let response = store.latestResponse {
-                ResponseViewerView(response: response)
-            } else {
-                ContentUnavailableView(
-                    "No response yet",
-                    systemImage: "tray",
-                    description: Text("Send a request to inspect the response.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .padding(14)
-        .background(RequestLabTheme.surface)
-    }
-
-    private func responseStatusBadge(_ response: APIExecutionResult) -> some View {
-        let color = RequestLabTheme.responseColor(statusCode: response.statusCode)
-
-        return Text("\(response.statusCode) - \(response.durationMilliseconds) ms")
-            .font(.caption.bold())
-            .monospacedDigit()
-            .foregroundStyle(RequestLabTheme.badgeForeground(for: color))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(RequestLabTheme.softFill(color))
-            )
-            .overlay {
-                Capsule(style: .continuous)
-                    .stroke(RequestLabTheme.softStroke(color), lineWidth: 1)
-            }
     }
 
     private var authTypeBinding: Binding<APIAuthType> {
