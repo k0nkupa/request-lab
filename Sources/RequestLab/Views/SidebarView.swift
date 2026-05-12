@@ -3,17 +3,22 @@ import SwiftUI
 
 struct SidebarView: View {
     @Bindable var store: AppStore
+    @State private var sidebarSearchText = ""
     @State private var renamingCollectionID: String?
     @State private var collectionNameDraft = ""
     @FocusState private var isCollectionNameFieldFocused: Bool
+    @State private var renamingRequestID: String?
+    @State private var requestNameDraft = ""
+    @FocusState private var isRequestNameFieldFocused: Bool
     @State private var selectedColorCollectionID: String?
+    @State private var pendingDelete: SidebarDeleteTarget?
 
     var body: some View {
         List(selection: selection) {
             Section("Collections") {
-                ForEach(store.workspace.collections) { collection in
+                ForEach(filteredCollections) { collection in
                     DisclosureGroup {
-                        ForEach(collection.environments) { environment in
+                        ForEach(filteredCollectionEnvironments(in: collection)) { environment in
                             let rowSelection = CenterPaneSelection.collectionEnvironment(
                                 collectionID: collection.id,
                                 environmentID: environment.id
@@ -36,19 +41,56 @@ struct SidebarView: View {
                                     }
 
                                     Button("Delete Environment", role: .destructive) {
-                                        store.deleteCollectionEnvironment(id: environment.id, fromCollectionID: collection.id)
+                                        confirmDelete(
+                                            .collectionEnvironment(
+                                                id: environment.id,
+                                                collectionID: collection.id,
+                                                name: environment.name
+                                            )
+                                        )
                                     }
                                 }
                         }
 
-                        ForEach(collection.requests) { request in
+                        ForEach(filteredRequests(in: collection)) { request in
                             let rowSelection = CenterPaneSelection.request(request.id)
 
                             requestLabel(request, isSelected: rowSelection == store.selectedCenterPane)
                                 .tag(rowSelection)
                                 .contextMenu {
+                                    Button("Rename Request") {
+                                        startRenamingRequest(request)
+                                    }
+
+                                    Button("Duplicate Request") {
+                                        store.duplicateRequest(id: request.id)
+                                    }
+
+                                    Menu("Move To Collection") {
+                                        ForEach(store.workspace.collections) { destinationCollection in
+                                            Button(destinationCollection.name) {
+                                                store.moveRequest(id: request.id, toCollectionID: destinationCollection.id)
+                                            }
+                                            .disabled(destinationCollection.id == collection.id)
+                                        }
+                                    }
+
+                                    Divider()
+
+                                    Button("Move Up") {
+                                        moveRequestUp(request, in: collection)
+                                    }
+                                    .disabled(!canMoveRequestUp(request, in: collection))
+
+                                    Button("Move Down") {
+                                        moveRequestDown(request, in: collection)
+                                    }
+                                    .disabled(!canMoveRequestDown(request, in: collection))
+
+                                    Divider()
+
                                     Button("Delete Request", role: .destructive) {
-                                        store.deleteRequest(id: request.id)
+                                        confirmDelete(.request(id: request.id, name: request.name))
                                     }
                                 }
                         }
@@ -90,14 +132,14 @@ struct SidebarView: View {
                         Divider()
 
                         Button("Delete Collection", role: .destructive) {
-                            store.deleteCollection(id: collection.id)
+                            confirmDelete(.collection(id: collection.id, name: collection.name))
                         }
                     }
                 }
             }
 
             Section("Global Environments") {
-                ForEach(store.workspace.environments) { environment in
+                ForEach(filteredGlobalEnvironments) { environment in
                     let rowSelection = CenterPaneSelection.globalEnvironment(environment.id)
 
                     environmentLabel(
@@ -112,7 +154,7 @@ struct SidebarView: View {
                             }
 
                             Button("Delete Environment", role: .destructive) {
-                                store.deleteEnvironment(id: environment.id)
+                                confirmDelete(.globalEnvironment(id: environment.id, name: environment.name))
                             }
                         }
                 }
@@ -125,15 +167,131 @@ struct SidebarView: View {
                         systemImage: "clock",
                         description: Text("Responses will appear here after requests run.")
                     )
+                } else if filteredHistory.isEmpty {
+                    ContentUnavailableView.search
                 } else {
-                    ForEach(store.workspace.history) { entry in
-                        Label(entry.url, systemImage: "clock")
+                    ForEach(filteredHistory) { entry in
+                        let rowSelection = CenterPaneSelection.history(entry.id)
+
+                        historyLabel(entry, isSelected: rowSelection == store.selectedCenterPane)
+                            .tag(rowSelection)
+                            .contextMenu {
+                                Button("Open Request") {
+                                    _ = store.openRequestFromHistory(id: entry.id)
+                                }
+                                .disabled(store.workspace.request(id: entry.requestId) == nil)
+
+                                Button("Re-run") {
+                                    Task {
+                                        await store.rerunHistoryEntry(id: entry.id)
+                                    }
+                                }
+                                .disabled(store.workspace.request(id: entry.requestId) == nil || store.isSending)
+                            }
                     }
                 }
             }
         }
         .listStyle(.sidebar)
+        .searchable(text: $sidebarSearchText, placement: .sidebar, prompt: "Search")
         .navigationTitle(store.editorTitle)
+        .confirmationDialog(
+            pendingDelete?.title ?? "Delete Item",
+            isPresented: isDeleteConfirmationPresented,
+            titleVisibility: .visible,
+            presenting: pendingDelete
+        ) { target in
+            Button(target.actionTitle, role: .destructive) {
+                performDelete(target)
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingDelete = nil
+            }
+        } message: { target in
+            Text(target.message)
+        }
+    }
+
+    private var normalizedSearchText: String {
+        sidebarSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isFilteringSidebar: Bool {
+        !normalizedSearchText.isEmpty
+    }
+
+    private var filteredCollections: [APICollection] {
+        guard isFilteringSidebar else {
+            return store.workspace.collections
+        }
+
+        return store.workspace.collections.filter { collection in
+            collectionMatchesSearch(collection)
+                || !filteredCollectionEnvironments(in: collection).isEmpty
+                || !filteredRequests(in: collection).isEmpty
+        }
+    }
+
+    private var filteredGlobalEnvironments: [APIEnvironment] {
+        guard isFilteringSidebar else {
+            return store.workspace.environments
+        }
+
+        return store.workspace.environments.filter(environmentMatchesSearch)
+    }
+
+    private var filteredHistory: [APIHistoryEntry] {
+        guard isFilteringSidebar else {
+            return store.workspace.history
+        }
+
+        return store.workspace.history.filter { entry in
+            matchesSearch(entry.url)
+                || matchesSearch(entry.requestName ?? "")
+                || matchesSearch(entry.method.rawValue)
+                || entry.statusCode.map { matchesSearch("\($0)") } == true
+        }
+    }
+
+    private func filteredCollectionEnvironments(in collection: APICollection) -> [APIEnvironment] {
+        guard isFilteringSidebar else {
+            return collection.environments
+        }
+
+        if collectionMatchesSearch(collection) {
+            return collection.environments
+        }
+
+        return collection.environments.filter(environmentMatchesSearch)
+    }
+
+    private func filteredRequests(in collection: APICollection) -> [APIRequest] {
+        guard isFilteringSidebar else {
+            return collection.requests
+        }
+
+        if collectionMatchesSearch(collection) {
+            return collection.requests
+        }
+
+        return collection.requests.filter(requestMatchesSearch)
+    }
+
+    private func collectionMatchesSearch(_ collection: APICollection) -> Bool {
+        matchesSearch(collection.name)
+    }
+
+    private func requestMatchesSearch(_ request: APIRequest) -> Bool {
+        matchesSearch(request.name) || matchesSearch(request.url)
+    }
+
+    private func environmentMatchesSearch(_ environment: APIEnvironment) -> Bool {
+        matchesSearch(environment.name)
+    }
+
+    private func matchesSearch(_ value: String) -> Bool {
+        value.localizedCaseInsensitiveContains(normalizedSearchText)
     }
 
     @ViewBuilder
@@ -160,6 +318,35 @@ struct SidebarView: View {
                 Image(systemName: "folder")
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(RequestLabTheme.collectionColor(collection.color))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func requestLabel(_ request: APIRequest, isSelected: Bool) -> some View {
+        if renamingRequestID == request.id {
+            TextField("Request name", text: $requestNameDraft)
+                .textFieldStyle(.plain)
+                .focused($isRequestNameFieldFocused)
+                .onSubmit {
+                    commitRequestRename()
+                }
+                .onExitCommand {
+                    cancelRequestRename()
+                }
+                .onChange(of: isRequestNameFieldFocused) { _, isFocused in
+                    if !isFocused, renamingRequestID == request.id {
+                        cancelRequestRename()
+                    }
+                }
+        } else {
+            Label {
+                Text(request.name)
+                    .fontWeight(isSelected ? .semibold : .regular)
+            } icon: {
+                Image(systemName: request.kind == .graphQL ? "curlybraces" : "doc.text")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(request.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
             }
         }
     }
@@ -239,15 +426,65 @@ struct SidebarView: View {
         .contentShape(Rectangle())
     }
 
-    private func requestLabel(_ request: APIRequest, isSelected: Bool) -> some View {
+    private func historyLabel(_ entry: APIHistoryEntry, isSelected: Bool) -> some View {
         Label {
-            Text(request.name)
-                .fontWeight(isSelected ? .semibold : .regular)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.requestName ?? entry.url)
+                    .fontWeight(isSelected ? .semibold : .regular)
+                    .lineLimit(1)
+
+                if entry.requestName != nil {
+                    Text(entry.url)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                HStack(spacing: 6) {
+                    Text(entry.method.rawValue)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(RequestLabTheme.methodColor(entry.method))
+
+                    if let statusCode = entry.statusCode {
+                        Text("\(statusCode)")
+                            .foregroundStyle(RequestLabTheme.responseColor(statusCode: statusCode))
+                    }
+
+                    if let durationMilliseconds = entry.durationMilliseconds {
+                        Text("\(durationMilliseconds) ms")
+                    }
+
+                    if let responseSizeBytes = entry.responseSizeBytes {
+                        Text(formatByteCount(responseSizeBytes))
+                    }
+
+                    if let timestamp = historyTimestamp(entry.createdAt) {
+                        Text(timestamp)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
         } icon: {
-            Image(systemName: request.kind == .graphQL ? "curlybraces" : "doc.text")
+            Image(systemName: "clock")
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(request.kind == .graphQL ? RequestLabTheme.graphQL : RequestLabTheme.selection)
+                .foregroundStyle(isSelected ? RequestLabTheme.selection : .secondary)
         }
+    }
+
+    private func historyTimestamp(_ date: Date) -> String? {
+        guard date.timeIntervalSince1970 > 0 else {
+            return nil
+        }
+
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func formatByteCount(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 
     private func environmentLabel(_ environment: APIEnvironment, isSelected: Bool, isActive: Bool) -> some View {
@@ -277,6 +514,8 @@ struct SidebarView: View {
             isCollectionNameFieldFocused = true
             return
         }
+
+        cancelRequestRename()
 
         if renamingCollectionID != nil {
             cancelCollectionRename()
@@ -308,10 +547,154 @@ struct SidebarView: View {
         isCollectionNameFieldFocused = false
     }
 
+    private func startRenamingRequest(_ request: APIRequest) {
+        if renamingRequestID == request.id {
+            isRequestNameFieldFocused = true
+            return
+        }
+
+        cancelCollectionRename()
+
+        if renamingRequestID != nil {
+            cancelRequestRename()
+        }
+
+        renamingRequestID = request.id
+        requestNameDraft = request.name
+        isRequestNameFieldFocused = true
+    }
+
+    private func commitRequestRename() {
+        guard let requestID = renamingRequestID else {
+            return
+        }
+
+        let trimmedName = requestNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            store.renameRequest(id: requestID, to: trimmedName)
+        }
+
+        renamingRequestID = nil
+        requestNameDraft = ""
+        isRequestNameFieldFocused = false
+    }
+
+    private func cancelRequestRename() {
+        renamingRequestID = nil
+        requestNameDraft = ""
+        isRequestNameFieldFocused = false
+    }
+
+    private func requestIndex(_ request: APIRequest, in collection: APICollection) -> Int? {
+        collection.requests.firstIndex { $0.id == request.id }
+    }
+
+    private func canMoveRequestUp(_ request: APIRequest, in collection: APICollection) -> Bool {
+        guard let index = requestIndex(request, in: collection) else {
+            return false
+        }
+
+        return index > 0
+    }
+
+    private func canMoveRequestDown(_ request: APIRequest, in collection: APICollection) -> Bool {
+        guard let index = requestIndex(request, in: collection) else {
+            return false
+        }
+
+        return index < collection.requests.count - 1
+    }
+
+    private func moveRequestUp(_ request: APIRequest, in collection: APICollection) {
+        guard let index = requestIndex(request, in: collection), index > 0 else {
+            return
+        }
+
+        store.reorderRequest(id: request.id, toIndex: index - 1)
+    }
+
+    private func moveRequestDown(_ request: APIRequest, in collection: APICollection) {
+        guard let index = requestIndex(request, in: collection), index < collection.requests.count - 1 else {
+            return
+        }
+
+        store.reorderRequest(id: request.id, toIndex: index + 1)
+    }
+
+    private func confirmDelete(_ target: SidebarDeleteTarget) {
+        pendingDelete = target
+    }
+
+    private func performDelete(_ target: SidebarDeleteTarget) {
+        switch target {
+        case .request(let id, _):
+            store.deleteRequest(id: id)
+        case .collection(let id, _):
+            store.deleteCollection(id: id)
+        case .globalEnvironment(let id, _):
+            store.deleteEnvironment(id: id)
+        case .collectionEnvironment(let id, let collectionID, _):
+            store.deleteCollectionEnvironment(id: id, fromCollectionID: collectionID)
+        }
+
+        pendingDelete = nil
+    }
+
+    private var isDeleteConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { pendingDelete != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDelete = nil
+                }
+            }
+        )
+    }
+
     private var selection: Binding<CenterPaneSelection?> {
         Binding(
             get: { store.selectedCenterPane },
             set: { store.selectCenterPane($0) }
         )
+    }
+}
+
+private enum SidebarDeleteTarget {
+    case request(id: String, name: String)
+    case collection(id: String, name: String)
+    case globalEnvironment(id: String, name: String)
+    case collectionEnvironment(id: String, collectionID: String, name: String)
+
+    var title: String {
+        switch self {
+        case .request:
+            "Delete Request?"
+        case .collection:
+            "Delete Collection?"
+        case .globalEnvironment, .collectionEnvironment:
+            "Delete Environment?"
+        }
+    }
+
+    var actionTitle: String {
+        switch self {
+        case .request:
+            "Delete Request"
+        case .collection:
+            "Delete Collection"
+        case .globalEnvironment, .collectionEnvironment:
+            "Delete Environment"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .request(_, let name):
+            "Delete \"\(name)\"? This cannot be undone."
+        case .collection(_, let name):
+            "Delete \"\(name)\" and its requests and environments? This cannot be undone."
+        case .globalEnvironment(_, let name), .collectionEnvironment(_, _, let name):
+            "Delete \"\(name)\"? This cannot be undone."
+        }
     }
 }

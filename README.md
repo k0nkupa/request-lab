@@ -30,19 +30,27 @@ The project is built with Swift Package Manager. The UI lives in the app target,
 ## Features
 
 - Native SwiftUI macOS interface with a sidebar, request editor, and inspector
-- REST request editing for method, URL, query params, headers, auth, and body
+- REST request editing for method, URL, structured query params, headers, auth, and body
 - GraphQL request support with operation name, query, and variables JSON
 - Environment variables with global and collection-scoped layering
+- Missing variable warnings before send, including highlighted unresolved tokens
+- Duplicate variable-name warnings in environment editors
 - Secret variable values stored in macOS Keychain instead of shared YAML files
 - Local-first `.workspace` folders backed by readable YAML
 - Workspace open, save, and save-as flows
 - Postman collection and environment JSON import
+- cURL import and copy-as-cURL export for selected requests
 - Request validation before send
 - Request execution through `URLSession`
-- Response inspection for status, headers, body, duration, and URL
-- Local request history stored under app-private workspace state
+- Response inspection for status, headers, body, duration, content type, and payload size
+- Local request history with detail view, original-request open, and rerun actions
+- Command palette for common workspace, import, create, send, and copy actions
 - JSON formatting helpers for request bodies and GraphQL variables
 - Release packaging for zipped macOS `.app` bundles
+
+## Current Limits
+
+RequestLab does not currently implement OAuth flows, cookie jars, a collection runner, scripting hooks, OpenAPI import, Insomnia import, team sync, cloud workspaces, or GraphQL schema exploration. Workspace sharing is file-based; secret values stay local in Keychain and are not included in shared YAML.
 
 ## Why It Exists
 
@@ -128,6 +136,7 @@ Keep portable behavior in `RequestLabCore`. Keep SwiftUI state and presentation 
 ## Testing
 
 The current suite covers workspace round trips, fixture compatibility, request validation, variable resolution, REST and GraphQL execution behavior, Keychain secret storage, Postman import mapping, JSON formatting, and workspace editing behavior.
+It also covers cURL import/export and response/history metadata compatibility.
 
 Run it with:
 
@@ -164,4 +173,3 @@ rtk swift test
 ## License
 
 RequestLab is released under the [MIT License](./LICENSE).
-

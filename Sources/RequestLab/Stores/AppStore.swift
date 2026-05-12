@@ -27,6 +27,10 @@ final class AppStore {
     @ObservationIgnored
     private let postmanImportService: PostmanImportService
     @ObservationIgnored
+    private let curlImportService: CurlImportService
+    @ObservationIgnored
+    private let curlExportService: CurlExportService
+    @ObservationIgnored
     private let requestValidationService: RequestValidationService
 
     init(
@@ -36,6 +40,8 @@ final class AppStore {
         workspaceFileStore: WorkspaceFileStore = WorkspaceFileStore(),
         keychainSecretStore: KeychainSecretStore = KeychainSecretStore(),
         postmanImportService: PostmanImportService = PostmanImportService(),
+        curlImportService: CurlImportService = CurlImportService(),
+        curlExportService: CurlExportService = CurlExportService(),
         requestValidationService: RequestValidationService = RequestValidationService()
     ) {
         self.workspace = workspace
@@ -44,6 +50,8 @@ final class AppStore {
         self.workspaceFileStore = workspaceFileStore
         self.keychainSecretStore = keychainSecretStore
         self.postmanImportService = postmanImportService
+        self.curlImportService = curlImportService
+        self.curlExportService = curlExportService
         self.requestValidationService = requestValidationService
         self.selectedRequestID = workspace.collections.first?.requests.first?.id
         self.selectedCenterPane = selectedRequestID.map(CenterPaneSelection.request)
@@ -113,7 +121,7 @@ final class AppStore {
             workspace.collections
                 .flatMap(\.environments)
                 .first { $0.id == environmentID }
-        case .request, .none:
+        case .request, .history, .none:
             nil
         }
     }
@@ -124,9 +132,40 @@ final class AppStore {
             "Global Environment"
         case .collectionEnvironment:
             "Collection Environment"
-        case .request, .none:
+        case .request, .history, .none:
             "Environment"
         }
+    }
+
+    var selectedHistoryEntry: APIHistoryEntry? {
+        guard case .history(let historyID) = selectedCenterPane else {
+            return nil
+        }
+
+        return workspace.history.first { $0.id == historyID }
+    }
+
+    var selectedHistoryRequest: APIRequest? {
+        guard let selectedHistoryEntry else {
+            return nil
+        }
+
+        return workspace.request(id: selectedHistoryEntry.requestId)
+    }
+
+    var unresolvedVariableReferences: [UnresolvedVariableReference] {
+        guard let selectedRequest else {
+            return []
+        }
+
+        return VariableResolver().unresolvedVariables(
+            in: selectedRequest,
+            environment: effectiveEnvironmentWithSecrets()
+        )
+    }
+
+    var unresolvedVariableNames: Set<String> {
+        Set(unresolvedVariableReferences.map(\.name))
     }
 
     var workspaceLocationTitle: String {
@@ -177,6 +216,49 @@ final class AppStore {
             executionErrorMessage = nil
         } catch {
             workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func importCurlCommand(_ command: String) {
+        do {
+            var request = try curlImportService.importRequest(from: command)
+            request.id = "req_\(UUID().uuidString)"
+            request.name = nextName(
+                base: request.name,
+                existingNames: workspace.collections.flatMap(\.requests).map(\.name)
+            )
+
+            if workspace.collections.isEmpty {
+                createCollection()
+            }
+
+            guard let collectionID = selectedCollection?.id ?? workspace.collections.first?.id,
+                  workspace.addRequest(request, toCollectionID: collectionID)
+            else {
+                throw RequestLabError.invalidWorkspace("Unable to add imported cURL request")
+            }
+
+            selectedRequestID = request.id
+            selectedCenterPane = .request(request.id)
+            workspaceErrorMessage = nil
+            clearExecutionState()
+        } catch {
+            workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    func curlCommandForSelectedRequest() -> String? {
+        guard let selectedRequest else {
+            workspaceErrorMessage = "Select a request before copying cURL."
+            return nil
+        }
+
+        do {
+            workspaceErrorMessage = nil
+            return try curlExportService.export(request: selectedRequest)
+        } catch {
+            workspaceErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return nil
         }
     }
 
@@ -259,6 +341,55 @@ final class AppStore {
 
         selectedRequestID = request.id
         selectedCenterPane = .request(request.id)
+        clearExecutionState()
+    }
+
+    func renameRequest(id requestID: String, to name: String) {
+        guard workspace.renameRequest(id: requestID, to: name) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
+    func duplicateRequest(id requestID: String) {
+        guard let request = workspace.collections
+            .flatMap(\.requests)
+            .first(where: { $0.id == requestID })
+        else {
+            return
+        }
+
+        let duplicateName = nextName(
+            base: "\(request.name) Copy",
+            existingNames: workspace.collections.flatMap(\.requests).map(\.name)
+        )
+        guard let duplicatedRequest = workspace.duplicateRequest(
+            id: requestID,
+            newID: "req_\(UUID().uuidString)",
+            name: duplicateName
+        ) else {
+            return
+        }
+
+        selectedRequestID = duplicatedRequest.id
+        selectedCenterPane = .request(duplicatedRequest.id)
+        clearExecutionState()
+    }
+
+    func moveRequest(id requestID: String, toCollectionID collectionID: String) {
+        guard workspace.moveRequest(id: requestID, toCollectionID: collectionID) else {
+            return
+        }
+
+        clearExecutionState()
+    }
+
+    func reorderRequest(id requestID: String, toIndex destinationIndex: Int) {
+        guard workspace.reorderRequest(id: requestID, toIndex: destinationIndex) else {
+            return
+        }
+
         clearExecutionState()
     }
 
@@ -373,6 +504,8 @@ final class AppStore {
             selectedRequestID = requestID
             selectedCenterPane = selection
             clearExecutionState()
+        case .history:
+            selectedCenterPane = selection
         case .globalEnvironment(let environmentID):
             selectedCenterPane = selection
             selectGlobalEnvironment(id: environmentID)
@@ -565,6 +698,48 @@ final class AppStore {
         isSending = false
     }
 
+    func openRequestFromHistory(id historyID: String) -> Bool {
+        guard let historyEntry = workspace.history.first(where: { $0.id == historyID }),
+              workspace.request(id: historyEntry.requestId) != nil
+        else {
+            return false
+        }
+
+        selectedRequestID = historyEntry.requestId
+        selectedCenterPane = .request(historyEntry.requestId)
+        clearExecutionState()
+        return true
+    }
+
+    func rerunHistoryEntry(id historyID: String) async {
+        guard let historyEntry = workspace.history.first(where: { $0.id == historyID }),
+              let request = workspace.request(id: historyEntry.requestId)
+        else {
+            latestResponse = nil
+            executionErrorMessage = "The original request for this history entry is no longer available."
+            return
+        }
+
+        selectedRequestID = request.id
+        isSending = true
+        executionErrorMessage = nil
+
+        do {
+            try requestValidationService.validateForSend(request)
+            let result = try await executionService.execute(
+                request,
+                environment: effectiveEnvironmentWithSecrets()
+            )
+            latestResponse = result
+            appendHistoryEntry(from: result)
+        } catch {
+            latestResponse = nil
+            executionErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+
+        isSending = false
+    }
+
     private func effectiveEnvironmentWithSecrets() -> APIEnvironment? {
         let globalEnvironment = environmentWithSecrets(selectedGlobalEnvironment)
         let collectionEnvironment = environmentWithSecrets(selectedCollectionEnvironment)
@@ -609,10 +784,13 @@ final class AppStore {
             APIHistoryEntry(
                 id: "hist_\(UUID().uuidString)",
                 requestId: result.requestId,
+                requestName: selectedRequest?.name,
                 method: result.method,
                 url: result.url,
                 statusCode: result.statusCode,
-                durationMilliseconds: result.durationMilliseconds
+                durationMilliseconds: result.durationMilliseconds,
+                responseSizeBytes: result.bodySizeBytes,
+                contentType: result.contentType
             ),
             at: 0
         )
@@ -668,6 +846,7 @@ final class AppStore {
 
 enum CenterPaneSelection: Hashable {
     case request(String)
+    case history(String)
     case globalEnvironment(String)
     case collectionEnvironment(collectionID: String, environmentID: String)
 }

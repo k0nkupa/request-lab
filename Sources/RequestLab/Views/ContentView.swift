@@ -5,84 +5,69 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Bindable var store: AppStore
+    @State private var selectedWorkbenchSection: WorkbenchSection = .requests
+    @State private var pendingDeleteRequestID: String?
+    @State private var isCurlImportPresented = false
+    @State private var curlImportText = ""
+    @State private var isCommandPalettePresented = false
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView(store: store)
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
-        } detail: {
+        VStack(spacing: 0) {
+            WorkbenchTopBar(
+                workspaceTitle: store.workspaceLocationTitle,
+                isSending: store.isSending,
+                canSend: store.selectedRequest != nil && !store.isSending,
+                isInspectorVisible: store.isInspectorVisible,
+                send: {
+                    Task {
+                        await store.sendSelectedRequest()
+                    }
+                },
+                toggleInspector: {
+                    store.isInspectorVisible.toggle()
+                },
+                environmentControl: {
+                    environmentMenu
+                },
+                actions: {
+                    topBarActions
+                }
+            )
+
+            Divider()
+
             HSplitView {
+                WorkbenchRailView(
+                    selectedSection: Binding(
+                        get: { selectedWorkbenchSection },
+                        set: { selectWorkbenchSection($0) }
+                    ),
+                    openCommandPalette: {
+                        isCommandPalettePresented = true
+                    }
+                )
+                .frame(width: 54)
+
+                WorkspaceNavigatorView(
+                    store: store,
+                    selectedSection: Binding(
+                        get: { selectedWorkbenchSection },
+                        set: { selectWorkbenchSection($0) }
+                    ),
+                    confirmDeleteRequest: { requestID in
+                        pendingDeleteRequestID = requestID
+                    }
+                )
+                    .frame(minWidth: 230, idealWidth: 270, maxWidth: 330)
+
                 centerWorkspace
                     .frame(minWidth: 620)
                     .background(RequestLabTheme.background)
 
                 if store.isInspectorVisible {
-                    InspectorView(store: store)
+                    ContextInspectorView(store: store)
                         .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
                         .background(RequestLabTheme.surface)
-                }
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup {
-                ToolbarIconButton("Open workspace", systemImage: "folder") {
-                    openWorkspacePanel()
-                }
-                .keyboardShortcut("o", modifiers: .command)
-
-                ToolbarIconButton("Create item", systemImage: "plus") {
-                    createItemPopover
-                }
-
-                ToolbarIconButton("Import Postman JSON", systemImage: "square.and.arrow.down") {
-                    importPopover
-                }
-
-                ToolbarIconButton("Send request", systemImage: "paperplane") {
-                    Task {
-                        await store.sendSelectedRequest()
-                    }
-                }
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(store.selectedRequest == nil || store.isSending)
-
-                ToolbarIconButton("Delete selected request", systemImage: "trash", role: .destructive) {
-                    store.deleteSelectedRequest()
-                }
-                .keyboardShortcut(.delete, modifiers: [])
-                .disabled(store.selectedRequest == nil)
-
-                ToolbarIconButton("Save workspace", systemImage: "square.and.arrow.down") {
-                    if store.workspaceURL == nil {
-                        saveWorkspacePanel()
-                    } else {
-                        store.saveWorkspace()
-                    }
-                }
-                .keyboardShortcut("s", modifiers: .command)
-
-                ToolbarIconButton("Save workspace as", systemImage: "square.and.arrow.down.on.square") {
-                    saveWorkspacePanel()
-                }
-                .keyboardShortcut("s", modifiers: [.command, .shift])
-            }
-
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 12) {
-                    Text(store.workspaceLocationTitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    environmentMenu
-                }
-            }
-
-            ToolbarItem {
-                ToolbarIconButton(
-                    store.isInspectorVisible ? "Hide inspector" : "Show inspector",
-                    systemImage: store.isInspectorVisible ? "sidebar.trailing" : "sidebar.right"
-                ) {
-                    store.isInspectorVisible.toggle()
                 }
             }
         }
@@ -101,6 +86,119 @@ struct ContentView: View {
         } message: {
             Text(store.workspaceErrorMessage ?? "")
         }
+        .confirmationDialog(
+            "Delete Request?",
+            isPresented: isDeleteRequestConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Request", role: .destructive) {
+                if let pendingDeleteRequestID {
+                    store.deleteRequest(id: pendingDeleteRequestID)
+                }
+
+                pendingDeleteRequestID = nil
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingDeleteRequestID = nil
+            }
+        } message: {
+            Text("Delete \"\(pendingDeleteRequest?.name ?? "selected request")\"? This cannot be undone.")
+        }
+        .sheet(isPresented: $isCurlImportPresented) {
+            CurlImportSheet(
+                command: $curlImportText,
+                onCancel: {
+                    curlImportText = ""
+                    isCurlImportPresented = false
+                },
+                onImport: {
+                    store.importCurlCommand(curlImportText)
+                    curlImportText = ""
+                    isCurlImportPresented = false
+                }
+            )
+        }
+        .sheet(isPresented: $isCommandPalettePresented) {
+            CommandPaletteView(commands: commandPaletteCommands)
+        }
+        .onChange(of: store.selectedCenterPane) { _, _ in
+            selectedWorkbenchSection = activeWorkbenchSection
+        }
+    }
+
+    private var topBarActions: some View {
+        HStack(spacing: RequestLabSpacing.sm) {
+            ToolbarIconButton("Open workspace", systemImage: "folder") {
+                openWorkspacePanel()
+            }
+            .keyboardShortcut("o", modifiers: .command)
+
+            ToolbarIconButton("Create item", systemImage: "plus") {
+                createItemPopover
+            }
+
+            ToolbarIconButton("Import and export", systemImage: "square.and.arrow.down") {
+                importPopover
+            }
+
+            ToolbarIconButton("Command palette", systemImage: "command") {
+                isCommandPalettePresented = true
+            }
+            .keyboardShortcut("k", modifiers: .command)
+
+            ToolbarIconButton("Delete selected request", systemImage: "trash", role: .destructive) {
+                pendingDeleteRequestID = store.selectedRequest?.id
+            }
+            .keyboardShortcut(.delete, modifiers: [])
+            .disabled(store.selectedRequest == nil)
+
+            ToolbarIconButton("Save workspace", systemImage: "square.and.arrow.down") {
+                if store.workspaceURL == nil {
+                    saveWorkspacePanel()
+                } else {
+                    store.saveWorkspace()
+                }
+            }
+            .keyboardShortcut("s", modifiers: .command)
+
+            ToolbarIconButton("Save workspace as", systemImage: "square.and.arrow.down.on.square") {
+                saveWorkspacePanel()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+        }
+    }
+
+    private var activeWorkbenchSection: WorkbenchSection {
+        switch store.selectedCenterPane {
+        case .globalEnvironment, .collectionEnvironment:
+            .environments
+        case .history:
+            .history
+        case .request, .none:
+            .requests
+        }
+    }
+
+    private var pendingDeleteRequest: APIRequest? {
+        guard let pendingDeleteRequestID else {
+            return nil
+        }
+
+        return store.workspace.collections
+            .flatMap(\.requests)
+            .first { $0.id == pendingDeleteRequestID }
+    }
+
+    private var isDeleteRequestConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteRequestID != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDeleteRequestID = nil
+                }
+            }
+        )
     }
 
     private var environmentMenu: some View {
@@ -137,9 +235,8 @@ struct ContentView: View {
         } label: {
             Label(store.environmentPairTitle, systemImage: "server.rack")
         }
-        .frame(minWidth: 180)
-        .tint(RequestLabTheme.environment)
         .help("Select global and collection environments")
+        .accessibilityLabel("Environment: \(store.environmentPairTitle)")
     }
 
     private var createItemPopover: some View {
@@ -177,10 +274,100 @@ struct ContentView: View {
             Button("Postman Environment") {
                 importPostmanEnvironmentPanel()
             }
+
+            Divider()
+
+            Button("cURL Command") {
+                isCurlImportPresented = true
+            }
+
+            Button("Copy Selected as cURL") {
+                copySelectedRequestAsCurl()
+            }
+            .disabled(store.selectedRequest == nil)
         }
         .buttonStyle(.plain)
         .padding(10)
         .frame(width: 220, alignment: .leading)
+    }
+
+    private var commandPaletteCommands: [CommandPaletteCommand] {
+        [
+            CommandPaletteCommand(id: "open-workspace", title: "Open Workspace", systemImage: "folder") {
+                openWorkspacePanel()
+            },
+            CommandPaletteCommand(id: "save-workspace", title: "Save Workspace", systemImage: "square.and.arrow.down") {
+                if store.workspaceURL == nil {
+                    saveWorkspacePanel()
+                } else {
+                    store.saveWorkspace()
+                }
+            },
+            CommandPaletteCommand(id: "save-workspace-as", title: "Save Workspace As", systemImage: "square.and.arrow.down.on.square") {
+                saveWorkspacePanel()
+            },
+            CommandPaletteCommand(id: "import-postman-collection", title: "Import Postman Collection", systemImage: "square.and.arrow.down") {
+                importPostmanCollectionPanel()
+            },
+            CommandPaletteCommand(id: "import-postman-environment", title: "Import Postman Environment", systemImage: "server.rack") {
+                importPostmanEnvironmentPanel()
+            },
+            CommandPaletteCommand(id: "import-curl", title: "Import cURL Command", systemImage: "terminal") {
+                isCurlImportPresented = true
+            },
+            CommandPaletteCommand(id: "new-request", title: "New Request", systemImage: "doc.badge.plus") {
+                store.createRequest()
+            },
+            CommandPaletteCommand(id: "new-graphql-request", title: "New GraphQL Request", systemImage: "curlybraces") {
+                store.createRequest(kind: .graphQL)
+            },
+            CommandPaletteCommand(id: "new-collection", title: "New Collection", systemImage: "folder.badge.plus") {
+                store.createCollection()
+            },
+            CommandPaletteCommand(id: "new-environment", title: "New Environment", systemImage: "server.rack") {
+                store.createEnvironment()
+            },
+            CommandPaletteCommand(
+                id: "send-request",
+                title: "Send Request",
+                systemImage: "paperplane",
+                isEnabled: store.selectedRequest != nil && !store.isSending
+            ) {
+                Task {
+                    await store.sendSelectedRequest()
+                }
+            },
+            CommandPaletteCommand(id: "toggle-inspector", title: "Toggle Inspector", systemImage: "sidebar.right") {
+                store.isInspectorVisible.toggle()
+            },
+            CommandPaletteCommand(id: "search-requests", title: "Search Requests", systemImage: "magnifyingglass") {
+                isCommandPalettePresented = false
+            },
+            CommandPaletteCommand(
+                id: "copy-response-body",
+                title: "Copy Response Body",
+                systemImage: "doc.on.doc",
+                isEnabled: store.latestResponse != nil
+            ) {
+                copyToPasteboard(store.latestResponse?.body ?? "")
+            },
+            CommandPaletteCommand(
+                id: "copy-response-headers",
+                title: "Copy Response Headers",
+                systemImage: "list.bullet.rectangle",
+                isEnabled: store.latestResponse != nil
+            ) {
+                copyToPasteboard(formattedHeaders(store.latestResponse?.headers ?? [:]))
+            },
+            CommandPaletteCommand(
+                id: "copy-curl",
+                title: "Copy as cURL",
+                systemImage: "terminal",
+                isEnabled: store.selectedRequest != nil
+            ) {
+                copySelectedRequestAsCurl()
+            }
+        ]
     }
 
     @ViewBuilder
@@ -188,6 +375,8 @@ struct ContentView: View {
         switch store.selectedCenterPane {
         case .globalEnvironment, .collectionEnvironment:
             EnvironmentEditorView(store: store)
+        case .history:
+            HistoryDetailView(store: store)
         case .request, .none:
             RequestEditorView(store: store)
         }
@@ -205,6 +394,15 @@ struct ContentView: View {
         }
 
         store.openWorkspace(at: url)
+    }
+
+    private func selectWorkbenchSection(_ section: WorkbenchSection) {
+        switch section {
+        case .requests, .environments, .history:
+            selectedWorkbenchSection = section
+        case .commands:
+            isCommandPalettePresented = true
+        }
     }
 
     private func saveWorkspacePanel() {
@@ -232,6 +430,26 @@ struct ContentView: View {
         }
     }
 
+    private func copySelectedRequestAsCurl() {
+        guard let command = store.curlCommandForSelectedRequest() else {
+            return
+        }
+
+        copyToPasteboard(command)
+    }
+
+    private func copyToPasteboard(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
+    private func formattedHeaders(_ headers: [String: String]) -> String {
+        headers
+            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+            .map { "\($0.key): \($0.value)" }
+            .joined(separator: "\n")
+    }
+
     private func openJSONPanel(prompt: String, onSelect: (URL) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
@@ -245,6 +463,54 @@ struct ContentView: View {
         }
 
         onSelect(url)
+    }
+}
+
+private struct CurlImportSheet: View {
+    @Binding var command: String
+    let onCancel: () -> Void
+    let onImport: () -> Void
+
+    private var canImport: Bool {
+        !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Import cURL", systemImage: "terminal")
+                    .font(.title2.bold())
+
+                Spacer()
+            }
+
+            TextEditor(text: $command)
+                .font(.system(.body, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .accessibilityLabel("cURL command")
+                .frame(width: 620, height: 220)
+                .padding(8)
+                .background(RequestLabTheme.elevatedSurface)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(RequestLabTheme.editorBorder, lineWidth: 1)
+                }
+
+            HStack {
+                Spacer()
+
+                Button("Cancel", role: .cancel) {
+                    onCancel()
+                }
+
+                Button("Import", systemImage: "square.and.arrow.down") {
+                    onImport()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canImport)
+            }
+        }
+        .padding(18)
     }
 }
 

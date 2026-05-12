@@ -14,6 +14,18 @@ public struct ResolvedAPIRequest: Equatable, Sendable {
     }
 }
 
+public struct UnresolvedVariableReference: Equatable, Hashable, Sendable, Identifiable {
+    public var name: String
+    public var location: String
+
+    public var id: String { "\(location):\(name)" }
+
+    public init(name: String, location: String) {
+        self.name = name
+        self.location = location
+    }
+}
+
 public struct VariableResolver: Sendable {
     public init() {}
 
@@ -33,16 +45,109 @@ public struct VariableResolver: Sendable {
         try resolveVariables(in: value, variables: variableMap(from: environment))
     }
 
-    private func variableMap(from environment: APIEnvironment?) -> [String: String] {
-        Dictionary(
-            uniqueKeysWithValues: (environment?.variables ?? []).compactMap { variable in
-                guard let value = variable.value, !value.isEmpty else {
-                    return nil
-                }
+    public func unresolvedVariables(in request: APIRequest, environment: APIEnvironment?) -> [UnresolvedVariableReference] {
+        let variables = Set(variableMap(from: environment).keys)
+        var references: [UnresolvedVariableReference] = []
+        var seen = Set<UnresolvedVariableReference>()
 
-                return (variable.name, value)
+        func append(_ name: String, location: String) {
+            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedName.isEmpty, !variables.contains(trimmedName) else {
+                return
             }
-        )
+
+            let reference = UnresolvedVariableReference(name: trimmedName, location: location)
+            guard !seen.contains(reference) else {
+                return
+            }
+
+            references.append(reference)
+            seen.insert(reference)
+        }
+
+        func appendTokens(in value: String, location: String) {
+            for segment in VariableTokenParser.segments(in: value) {
+                if case .variable(_, let name) = segment {
+                    append(name, location: location)
+                }
+            }
+        }
+
+        appendTokens(in: request.url, location: "URL")
+
+        for (key, value) in request.params {
+            appendTokens(in: key, location: "Query parameter key")
+            appendTokens(in: value, location: "Query parameter value")
+        }
+
+        for (key, value) in request.headers {
+            appendTokens(in: key, location: "Header key")
+            appendTokens(in: value, location: "Header value")
+        }
+
+        appendAuthVariables(request.auth, append: append)
+
+        if request.kind == .graphQL {
+            if let graphQL = request.graphQL {
+                appendTokens(in: graphQL.query, location: "GraphQL query")
+                appendTokens(in: graphQL.operationName ?? "", location: "GraphQL operation")
+                appendTokens(in: graphQL.variables, location: "GraphQL variables")
+            }
+        } else {
+            appendBodyVariables(request.body, appendTokens: appendTokens)
+        }
+
+        return references
+    }
+
+    private func variableMap(from environment: APIEnvironment?) -> [String: String] {
+        (environment?.variables ?? []).reduce(into: [:]) { result, variable in
+            guard let value = variable.value, !value.isEmpty else {
+                return
+            }
+
+            result[variable.name] = value
+        }
+    }
+
+    private func appendAuthVariables(
+        _ auth: APIAuth?,
+        append: (String, String) -> Void
+    ) {
+        guard let auth, auth.type != .none else {
+            return
+        }
+
+        switch auth.type {
+        case .none:
+            return
+        case .bearer:
+            append(auth.tokenVariable ?? "", "Bearer token")
+        case .basic:
+            append(auth.usernameVariable ?? "", "Basic username")
+            append(auth.passwordVariable ?? "", "Basic password")
+        case .apiKey:
+            append(auth.keyValueVariable ?? "", "API key value")
+        }
+    }
+
+    private func appendBodyVariables(
+        _ body: APIBody,
+        appendTokens: (String, String) -> Void
+    ) {
+        switch body {
+        case .none:
+            return
+        case .raw(let value):
+            appendTokens(value, "Body")
+        case .json(let value):
+            appendTokens(value, "JSON body")
+        case .form(let fields):
+            for (key, value) in fields {
+                appendTokens(key, "Form key")
+                appendTokens(value, "Form value")
+            }
+        }
     }
 
     private func resolveHeaders(_ headers: [String: String], variables: [String: String]) throws -> [String: String] {

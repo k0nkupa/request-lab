@@ -1,0 +1,95 @@
+import SwiftUI
+
+struct CommandPaletteCommand: Identifiable {
+    let id: String
+    let title: String
+    let systemImage: String
+    let isEnabled: Bool
+    let action: () -> Void
+
+    init(
+        id: String,
+        title: String,
+        systemImage: String,
+        isEnabled: Bool = true,
+        action: @escaping () -> Void
+    ) {
+        self.id = id
+        self.title = title
+        self.systemImage = systemImage
+        self.isEnabled = isEnabled
+        self.action = action
+    }
+}
+
+struct CommandPaletteView: View {
+    let commands: [CommandPaletteCommand]
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
+
+    private var filteredCommands: [CommandPaletteCommand] {
+        let normalizedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedSearchText.isEmpty else {
+            return commands
+        }
+
+        return commands.filter { command in
+            command.title.localizedCaseInsensitiveContains(normalizedSearchText)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: RequestLabSpacing.md) {
+            TextField("Search commands", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .focused($isSearchFocused)
+                .accessibilityLabel("Search commands")
+
+            Divider()
+
+            commandList
+        }
+        .padding(RequestLabSpacing.lg)
+        .workbenchSurface(.chrome, cornerRadius: 14)
+        .onAppear {
+            isSearchFocused = true
+        }
+    }
+
+    @ViewBuilder
+    private var commandList: some View {
+        if filteredCommands.isEmpty {
+            ContentUnavailableView.search
+                .frame(width: 420, height: 220)
+        } else {
+            ScrollView {
+                VStack(spacing: RequestLabSpacing.xs) {
+                    ForEach(filteredCommands) { command in
+                        Button {
+                            command.action()
+                            dismiss()
+                        } label: {
+                            HStack(spacing: RequestLabSpacing.sm) {
+                                Image(systemName: command.systemImage)
+                                    .frame(width: 18)
+                                    .symbolRenderingMode(.hierarchical)
+
+                                Text(command.title)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.horizontal, RequestLabSpacing.md)
+                            .padding(.vertical, 7)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!command.isEnabled)
+                        .accessibilityLabel(command.title)
+                    }
+                }
+            }
+            .frame(width: 420, height: 280)
+        }
+    }
+}

@@ -132,6 +132,212 @@ struct WorkspaceEditingTests {
         #expect(workspace.collections.first?.requests.isEmpty == true)
     }
 
+    @Test("finds requests by id")
+    func findsRequestsByID() {
+        let request = APIRequest(
+            id: "req_orders",
+            name: "Orders",
+            method: .get,
+            url: "https://api.example.test/orders"
+        )
+        let workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(id: "col", name: "Collection", requests: [request])
+            ]
+        )
+
+        #expect(workspace.request(id: "req_orders") == request)
+        #expect(workspace.request(id: "req_missing") == nil)
+    }
+
+    @Test("renames requests by id")
+    func renamesRequestsByID() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(
+                    id: "col",
+                    name: "Collection",
+                    requests: [APIRequest(id: "req_orders", name: "Orders", method: .get, url: "https://api.example.test/orders")]
+                )
+            ]
+        )
+
+        let didRename = workspace.renameRequest(id: "req_orders", to: "\n  Customer Orders \t\n")
+
+        #expect(didRename)
+        #expect(workspace.collections.first?.requests.first?.name == "Customer Orders")
+    }
+
+    @Test("rename request rejects empty names")
+    func renameRequestRejectsEmptyNames() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(
+                    id: "col",
+                    name: "Collection",
+                    requests: [APIRequest(id: "req_orders", name: "Orders", method: .get, url: "https://api.example.test/orders")]
+                )
+            ]
+        )
+
+        let didRename = workspace.renameRequest(id: "req_orders", to: "   ")
+
+        #expect(!didRename)
+        #expect(workspace.collections.first?.requests.first?.name == "Orders")
+    }
+
+    @Test("duplicates requests with caller-provided id and name")
+    func duplicatesRequestsWithCallerProvidedIDAndName() throws {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(
+                    id: "col",
+                    name: "Collection",
+                    requests: [
+                        APIRequest(
+                            id: "req_create_order",
+                            name: "Create Order",
+                            method: .post,
+                            url: "https://api.example.test/orders",
+                            headers: ["Content-Type": "application/json"],
+                            params: ["dryRun": "true"],
+                            auth: APIAuth(type: .bearer, tokenVariable: "apiToken"),
+                            body: .json(#"{"sku":"ABC"}"#)
+                        )
+                    ]
+                )
+            ]
+        )
+
+        let duplicatedRequest = workspace.duplicateRequest(id: "req_create_order", newID: "req_create_order_copy", name: "Create Order Copy")
+        let duplicate = try #require(duplicatedRequest)
+        let requests = try #require(workspace.collections.first?.requests)
+
+        #expect(duplicate.id == "req_create_order_copy")
+        #expect(duplicate.name == "Create Order Copy")
+        #expect(requests.map(\.id) == ["req_create_order", "req_create_order_copy"])
+        #expect(requests[1].method == .post)
+        #expect(requests[1].url == "https://api.example.test/orders")
+        #expect(requests[1].headers == ["Content-Type": "application/json"])
+        #expect(requests[1].params == ["dryRun": "true"])
+        #expect(requests[1].auth == APIAuth(type: .bearer, tokenVariable: "apiToken"))
+        #expect(requests[1].body == .json(#"{"sku":"ABC"}"#))
+
+        let didUpdateDuplicate = workspace.updateRequest(id: "req_create_order_copy") { request in
+            request.url = "https://api.example.test/orders/copy"
+            request.headers["X-Copy"] = "true"
+        }
+
+        #expect(didUpdateDuplicate)
+        #expect(workspace.collections.first?.requests[0].url == "https://api.example.test/orders")
+        #expect(workspace.collections.first?.requests[0].headers["X-Copy"] == nil)
+        #expect(workspace.collections.first?.requests[1].url == "https://api.example.test/orders/copy")
+        #expect(workspace.collections.first?.requests[1].headers["X-Copy"] == "true")
+    }
+
+    @Test("moves requests to another collection")
+    func movesRequestsToAnotherCollection() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(
+                    id: "col_orders",
+                    name: "Orders",
+                    requests: [
+                        APIRequest(id: "req_create_order", name: "Create Order", method: .post, url: "https://api.example.test/orders"),
+                        APIRequest(id: "req_get_order", name: "Get Order", method: .get, url: "https://api.example.test/orders/123"),
+                    ]
+                ),
+                APICollection(id: "col_customers", name: "Customers"),
+            ]
+        )
+
+        let didMove = workspace.moveRequest(id: "req_get_order", toCollectionID: "col_customers")
+
+        #expect(didMove)
+        #expect(workspace.collections[0].requests.map(\.id) == ["req_create_order"])
+        #expect(workspace.collections[1].requests.map(\.id) == ["req_get_order"])
+    }
+
+    @Test("reorders requests within their collection")
+    func reordersRequestsWithinTheirCollection() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(
+                    id: "col_orders",
+                    name: "Orders",
+                    requests: [
+                        APIRequest(id: "req_one", name: "One", method: .get, url: "https://api.example.test/one"),
+                        APIRequest(id: "req_two", name: "Two", method: .get, url: "https://api.example.test/two"),
+                        APIRequest(id: "req_three", name: "Three", method: .get, url: "https://api.example.test/three"),
+                    ]
+                ),
+                APICollection(
+                    id: "col_customers",
+                    name: "Customers",
+                    requests: [
+                        APIRequest(id: "req_customer", name: "Customer", method: .get, url: "https://api.example.test/customers/123")
+                    ]
+                ),
+            ]
+        )
+
+        let didReorder = workspace.reorderRequest(id: "req_three", toIndex: 0)
+
+        #expect(didReorder)
+        #expect(workspace.collections[0].requests.map(\.id) == ["req_three", "req_one", "req_two"])
+        #expect(workspace.collections[1].requests.map(\.id) == ["req_customer"])
+    }
+
+    @Test("request edits fail for invalid inputs")
+    func requestEditsFailForInvalidInputs() {
+        var workspace = APIWorkspace(
+            id: "wrk",
+            name: "Workspace",
+            collections: [
+                APICollection(
+                    id: "col_orders",
+                    name: "Orders",
+                    requests: [
+                        APIRequest(id: "req_orders", name: "Orders", method: .get, url: "https://api.example.test/orders")
+                    ]
+                ),
+                APICollection(id: "col_customers", name: "Customers"),
+            ]
+        )
+
+        let missingDuplicate = workspace.duplicateRequest(id: "req_missing", newID: "req_copy", name: "Copy")
+        let emptyNameDuplicate = workspace.duplicateRequest(id: "req_orders", newID: "req_copy", name: "   ")
+        let duplicateIDRequest = workspace.duplicateRequest(id: "req_orders", newID: "req_orders", name: "Copy")
+        let didMoveMissingRequest = workspace.moveRequest(id: "req_missing", toCollectionID: "col_customers")
+        let didMoveToMissingCollection = workspace.moveRequest(id: "req_orders", toCollectionID: "col_missing")
+        let didReorderMissingRequest = workspace.reorderRequest(id: "req_missing", toIndex: 0)
+        let didReorderOutOfBounds = workspace.reorderRequest(id: "req_orders", toIndex: 1)
+        let didDeleteMissingRequest = workspace.deleteRequest(id: "req_missing")
+
+        #expect(missingDuplicate == nil)
+        #expect(emptyNameDuplicate == nil)
+        #expect(duplicateIDRequest == nil)
+        #expect(!didMoveMissingRequest)
+        #expect(!didMoveToMissingCollection)
+        #expect(!didReorderMissingRequest)
+        #expect(!didReorderOutOfBounds)
+        #expect(!didDeleteMissingRequest)
+        #expect(workspace.collections[0].requests.map(\.id) == ["req_orders"])
+        #expect(workspace.collections[1].requests.isEmpty)
+    }
+
     @Test("adds and deletes environments")
     func addsAndDeletesEnvironments() {
         var workspace = APIWorkspace(id: "wrk", name: "Workspace")

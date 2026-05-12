@@ -137,6 +137,84 @@ struct WorkspaceFileStoreTests {
         #expect(collection.environments.isEmpty)
     }
 
+    @Test("legacy history YAML decodes with default metadata")
+    func legacyHistoryYAMLDecodesWithDefaultMetadata() throws {
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        try writeLegacyWorkspace(
+            to: tempURL,
+            collectionYAML: """
+            id: col_legacy
+            name: Legacy
+            requests: []
+
+            """
+        )
+        let clientURL = tempURL.appending(path: ".client")
+        try FileManager.default.createDirectory(at: clientURL, withIntermediateDirectories: true)
+        try """
+        - id: hist_legacy
+          requestId: req_legacy
+          method: GET
+          url: https://api.example.test/legacy
+          statusCode: 200
+          durationMilliseconds: 14
+
+        """.write(to: clientURL.appending(path: "history.yaml"), atomically: true, encoding: .utf8)
+
+        let workspace = try WorkspaceFileStore(fileManager: .default).load(from: tempURL)
+        let historyEntry = try #require(workspace.history.first)
+
+        #expect(historyEntry.createdAt == Date(timeIntervalSince1970: 0))
+        #expect(historyEntry.requestName == nil)
+        #expect(historyEntry.responseSizeBytes == nil)
+        #expect(historyEntry.contentType == nil)
+    }
+
+    @Test("history metadata saves and loads")
+    func historyMetadataSavesAndLoads() throws {
+        let tempURL = temporaryWorkspaceURL()
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let historyEntry = APIHistoryEntry(
+            id: "hist_metadata",
+            requestId: "req_orders",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            requestName: "List orders",
+            method: .get,
+            url: "https://api.example.test/orders",
+            statusCode: 200,
+            durationMilliseconds: 42,
+            responseSizeBytes: 128,
+            contentType: "application/json"
+        )
+        let workspace = APIWorkspace(
+            id: "wrk_history_metadata",
+            name: "History Metadata",
+            collections: [
+                APICollection(
+                    id: "col_orders",
+                    name: "Orders",
+                    requests: [
+                        APIRequest(
+                            id: "req_orders",
+                            name: "List orders",
+                            method: .get,
+                            url: "https://api.example.test/orders"
+                        )
+                    ]
+                )
+            ],
+            history: [historyEntry]
+        )
+
+        let store = WorkspaceFileStore(fileManager: .default)
+        try store.save(workspace, to: tempURL)
+        let loaded = try store.load(from: tempURL)
+
+        #expect(loaded.history.first == historyEntry)
+    }
+
     @Test("collection YAML with unknown color decodes as default")
     func collectionYAMLWithUnknownColorDecodesAsDefault() throws {
         let tempURL = temporaryWorkspaceURL()
@@ -554,10 +632,14 @@ extension APIWorkspace {
                 APIHistoryEntry(
                     id: "hist_orders_list",
                     requestId: "req_orders_list",
+                    createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                    requestName: "List orders",
                     method: .get,
                     url: "http://localhost:3000/orders",
                     statusCode: 200,
-                    durationMilliseconds: 42
+                    durationMilliseconds: 42,
+                    responseSizeBytes: 256,
+                    contentType: "application/json"
                 )
             ]
         )

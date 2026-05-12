@@ -76,6 +76,74 @@ struct VariableResolverTests {
         }
     }
 
+    @Test("detects unresolved variables before send")
+    func detectsUnresolvedVariablesBeforeSend() {
+        let request = APIRequest(
+            id: "req_missing",
+            name: "Missing",
+            method: .post,
+            url: "{{baseUrl}}/orders/{{orderId}}",
+            headers: ["X-{{headerName}}": "{{headerValue}}"],
+            params: ["{{paramKey}}": "{{paramValue}}"],
+            auth: APIAuth(type: .bearer, tokenVariable: "apiToken"),
+            body: .json(#"{"brand":"{{brand}}"}"#)
+        )
+        let environment = APIEnvironment(
+            id: "env_local",
+            name: "Local",
+            variables: [
+                APIVariable(name: "baseUrl", value: "https://api.example.test")
+            ]
+        )
+
+        let unresolvedVariables = VariableResolver().unresolvedVariables(in: request, environment: environment)
+
+        #expect(
+            unresolvedVariables == [
+                UnresolvedVariableReference(name: "orderId", location: "URL"),
+                UnresolvedVariableReference(name: "paramKey", location: "Query parameter key"),
+                UnresolvedVariableReference(name: "paramValue", location: "Query parameter value"),
+                UnresolvedVariableReference(name: "headerName", location: "Header key"),
+                UnresolvedVariableReference(name: "headerValue", location: "Header value"),
+                UnresolvedVariableReference(name: "apiToken", location: "Bearer token"),
+                UnresolvedVariableReference(name: "brand", location: "JSON body")
+            ]
+        )
+    }
+
+    @Test("detects unresolved GraphQL variable tokens before send")
+    func detectsUnresolvedGraphQLVariablesBeforeSend() {
+        let request = APIRequest(
+            id: "req_graphql_missing",
+            name: "GraphQL Missing",
+            kind: .graphQL,
+            method: .post,
+            url: "{{baseUrl}}/graphql",
+            graphQL: APIGraphQLPayload(
+                query: "query {{operationName}} { viewer { id } }",
+                operationName: "{{operationName}}",
+                variables: #"{"limit":{{limit}}}"#
+            )
+        )
+        let environment = APIEnvironment(
+            id: "env_local",
+            name: "Local",
+            variables: [
+                APIVariable(name: "baseUrl", value: "https://api.example.test")
+            ]
+        )
+
+        let unresolvedVariables = VariableResolver().unresolvedVariables(in: request, environment: environment)
+
+        #expect(
+            unresolvedVariables == [
+                UnresolvedVariableReference(name: "operationName", location: "GraphQL query"),
+                UnresolvedVariableReference(name: "operationName", location: "GraphQL operation"),
+                UnresolvedVariableReference(name: "limit", location: "GraphQL variables")
+            ]
+        )
+    }
+
     @Test("collection variables override global variables")
     func collectionVariablesOverrideGlobalVariables() throws {
         let globalEnvironment = APIEnvironment(
@@ -100,6 +168,28 @@ struct VariableResolverTests {
         #expect(merged.variables.first { $0.name == "baseUrl" }?.value == "https://collection.example.test")
         #expect(merged.variables.first { $0.name == "apiToken" }?.value == "global-token")
         #expect(merged.variables.first { $0.name == "tenantId" }?.value == "tenant-123")
+    }
+
+    @Test("duplicate variable names do not crash resolver")
+    func duplicateVariableNamesDoNotCrashResolver() throws {
+        let request = APIRequest(
+            id: "req_duplicate_variable",
+            name: "Duplicate Variable",
+            method: .get,
+            url: "{{baseUrl}}/orders"
+        )
+        let environment = APIEnvironment(
+            id: "env_duplicate",
+            name: "Duplicate",
+            variables: [
+                APIVariable(name: "baseUrl", value: "https://first.example.test"),
+                APIVariable(name: "baseUrl", value: "https://second.example.test")
+            ]
+        )
+
+        let resolved = try VariableResolver().resolve(request, environment: environment)
+
+        #expect(resolved.url.absoluteString == "https://second.example.test/orders")
     }
 
     @Test("resolves basic auth and form body")

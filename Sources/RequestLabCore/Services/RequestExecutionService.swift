@@ -8,6 +8,8 @@ public struct APIExecutionResult: Equatable, Sendable {
     public var durationMilliseconds: Int
     public var headers: [String: String]
     public var body: String
+    public var bodySizeBytes: Int
+    public var contentType: String?
 
     public init(
         requestId: String,
@@ -16,7 +18,9 @@ public struct APIExecutionResult: Equatable, Sendable {
         statusCode: Int,
         durationMilliseconds: Int,
         headers: [String: String],
-        body: String
+        body: String,
+        bodySizeBytes: Int? = nil,
+        contentType: String? = nil
     ) {
         self.requestId = requestId
         self.method = method
@@ -25,6 +29,8 @@ public struct APIExecutionResult: Equatable, Sendable {
         self.durationMilliseconds = durationMilliseconds
         self.headers = headers
         self.body = body
+        self.bodySizeBytes = bodySizeBytes ?? body.utf8.count
+        self.contentType = contentType
     }
 }
 
@@ -58,14 +64,18 @@ public struct RequestExecutionService: Sendable {
             throw RequestLabError.invalidWorkspace("Request did not return an HTTP response")
         }
 
+        let headers = responseHeaders(from: httpResponse)
+
         return APIExecutionResult(
             requestId: request.id,
             method: request.method,
             url: resolved.url.absoluteString,
             statusCode: httpResponse.statusCode,
             durationMilliseconds: duration,
-            headers: responseHeaders(from: httpResponse),
-            body: String(data: data, encoding: .utf8) ?? ""
+            headers: headers,
+            body: String(data: data, encoding: .utf8) ?? "",
+            bodySizeBytes: data.count,
+            contentType: contentType(from: headers)
         )
     }
 
@@ -77,5 +87,11 @@ public struct RequestExecutionService: Sendable {
 
             headers[key] = String(describing: item.value)
         }
+    }
+
+    private func contentType(from headers: [String: String]) -> String? {
+        headers.first { key, _ in
+            key.caseInsensitiveCompare("Content-Type") == .orderedSame
+        }?.value
     }
 }

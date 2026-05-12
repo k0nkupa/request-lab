@@ -1,6 +1,10 @@
 - id: hist_orders_list
   requestId: req_orders_list
+  createdAt: 2023-11-14T22:13:20Z
+  requestName: List orders
   method: GET
   url: http://localhost:3000/orders
   statusCode: 200
   durationMilliseconds: 42
+  responseSizeBytes: 256
+  contentType: application/json

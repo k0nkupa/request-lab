@@ -4,10 +4,12 @@ import SwiftUI
 struct VariableTokenTextField: View {
     let title: String
     @Binding var text: String
+    let unresolvedNames: Set<String>
     @FocusState private var isFocused: Bool
 
-    init(_ title: String, text: Binding<String>) {
+    init(_ title: String, text: Binding<String>, unresolvedNames: Set<String> = []) {
         self.title = title
+        self.unresolvedNames = unresolvedNames
         _text = text
     }
 
@@ -23,7 +25,7 @@ struct VariableTokenTextField: View {
                 .opacity(shouldShowTokens ? 0.01 : 1)
 
             if shouldShowTokens {
-                VariableTokenRunView(text: text)
+                VariableTokenRunView(text: text, unresolvedNames: unresolvedNames)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: 28)
                     .background(RequestLabTheme.elevatedSurface)
@@ -44,6 +46,7 @@ struct VariableTokenTextField: View {
 
 private struct VariableTokenRunView: View {
     let text: String
+    let unresolvedNames: Set<String>
 
     private var segments: [VariableTokenSegment] {
         VariableTokenParser.segments(in: text)
@@ -59,19 +62,21 @@ private struct VariableTokenRunView: View {
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(.primary)
                     case .variable(_, let name):
+                        let color = unresolvedNames.contains(name) ? RequestLabTheme.warning : RequestLabTheme.environment
                         Text(name)
                             .font(.system(.body, design: .monospaced).weight(.semibold))
-                            .foregroundStyle(RequestLabTheme.environment)
+                            .foregroundStyle(color)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .background(
                                 Capsule(style: .continuous)
-                                    .fill(RequestLabTheme.softFill(RequestLabTheme.environment))
+                                    .fill(RequestLabTheme.softFill(color))
                             )
                             .overlay {
                                 Capsule(style: .continuous)
-                                    .stroke(RequestLabTheme.softStroke(RequestLabTheme.environment), lineWidth: 1)
+                                    .stroke(RequestLabTheme.softStroke(color), lineWidth: 1)
                             }
+                            .help(unresolvedNames.contains(name) ? "Unresolved variable" : "Resolved variable")
                     }
                 }
             }
