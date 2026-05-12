@@ -40,11 +40,7 @@ struct KeyValueTableEditor: View {
                     }
                 }
                 .padding(10)
-                .background(RequestLabTheme.elevatedSurface)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(RequestLabTheme.editorBorder, lineWidth: 1)
-                }
+                .workbenchSurface(.elevated, cornerRadius: 8)
             }
 
             Spacer()

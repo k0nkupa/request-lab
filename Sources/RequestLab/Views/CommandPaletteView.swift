@@ -41,7 +41,7 @@ struct CommandPaletteView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: RequestLabSpacing.md) {
             TextField("Search commands", text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .focused($isSearchFocused)
@@ -49,41 +49,47 @@ struct CommandPaletteView: View {
 
             Divider()
 
-            if filteredCommands.isEmpty {
-                ContentUnavailableView.search
-                    .frame(width: 420, height: 220)
-            } else {
-                ScrollView {
-                    VStack(spacing: 4) {
-                        ForEach(filteredCommands) { command in
-                            Button {
-                                command.action()
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: command.systemImage)
-                                        .frame(width: 18)
-                                        .symbolRenderingMode(.hierarchical)
-
-                                    Text(command.title)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!command.isEnabled)
-                            .accessibilityLabel(command.title)
-                        }
-                    }
-                }
-                .frame(width: 420, height: 280)
-            }
+            commandList
         }
-        .padding(14)
+        .padding(RequestLabSpacing.lg)
+        .workbenchSurface(.chrome, cornerRadius: 14)
         .onAppear {
             isSearchFocused = true
+        }
+    }
+
+    @ViewBuilder
+    private var commandList: some View {
+        if filteredCommands.isEmpty {
+            ContentUnavailableView.search
+                .frame(width: 420, height: 220)
+        } else {
+            ScrollView {
+                VStack(spacing: RequestLabSpacing.xs) {
+                    ForEach(filteredCommands) { command in
+                        Button {
+                            command.action()
+                            dismiss()
+                        } label: {
+                            HStack(spacing: RequestLabSpacing.sm) {
+                                Image(systemName: command.systemImage)
+                                    .frame(width: 18)
+                                    .symbolRenderingMode(.hierarchical)
+
+                                Text(command.title)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.horizontal, RequestLabSpacing.md)
+                            .padding(.vertical, 7)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!command.isEnabled)
+                        .accessibilityLabel(command.title)
+                    }
+                }
+            }
+            .frame(width: 420, height: 280)
         }
     }
 }

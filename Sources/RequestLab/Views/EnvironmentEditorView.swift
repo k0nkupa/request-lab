@@ -11,12 +11,14 @@ struct EnvironmentEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-                .padding()
+                .padding(.horizontal, RequestLabSpacing.lg)
+                .padding(.vertical, RequestLabSpacing.md)
+                .workbenchSurface(.chrome, cornerRadius: 0)
 
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: RequestLabSpacing.lg) {
                     if let environment {
                         environmentForm(environment)
                     } else {
@@ -27,7 +29,7 @@ struct EnvironmentEditorView: View {
                         )
                     }
                 }
-                .padding()
+                .padding(RequestLabSpacing.lg)
             }
         }
     }
@@ -55,7 +57,7 @@ struct EnvironmentEditorView: View {
     }
 
     private func environmentForm(_ environment: APIEnvironment) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: RequestLabSpacing.md) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Name")
                     .font(.headline)
@@ -66,10 +68,11 @@ struct EnvironmentEditorView: View {
                 )
                 .textFieldStyle(.roundedBorder)
             }
+            .padding(RequestLabSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .workbenchSurface(.elevated, cornerRadius: 8, tint: RequestLabTheme.environment)
 
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: RequestLabSpacing.md) {
                 HStack {
                     Text("Variables")
                         .font(.headline)
@@ -114,6 +117,9 @@ struct EnvironmentEditorView: View {
                     }
                 }
             }
+            .padding(RequestLabSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .workbenchSurface(.elevated, cornerRadius: 8, tint: RequestLabTheme.environment)
 
             Spacer()
         }
@@ -169,8 +175,12 @@ struct EnvironmentEditorView: View {
                     .foregroundStyle(RequestLabTheme.warning)
             }
         }
-        .padding(10)
-        .requestLabSurface(tint: variable.isSecret ? RequestLabTheme.warning : RequestLabTheme.environment)
+        .padding(RequestLabSpacing.md)
+        .workbenchSurface(
+            .elevated,
+            cornerRadius: 8,
+            tint: variable.isSecret ? RequestLabTheme.warning : RequestLabTheme.environment
+        )
     }
 
     private func duplicateVariableNames(in environment: APIEnvironment) -> Set<String> {
