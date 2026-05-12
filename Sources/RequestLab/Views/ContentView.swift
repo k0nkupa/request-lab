@@ -65,7 +65,7 @@ struct ContentView: View {
                     .background(RequestLabTheme.background)
 
                 if store.isInspectorVisible {
-                    InspectorView(store: store)
+                    ContextInspectorView(store: store)
                         .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
                         .background(RequestLabTheme.surface)
                 }
